@@ -1,0 +1,75 @@
+{% comment %}
+  SubBulk — đặt trong section sản phẩm, sát buy box.
+{% endcomment %}
+
+{% capture selling_groups_json %}
+[
+{%- for group in product.selling_plan_groups -%}
+  {%- unless forloop.first -%},{%- endunless -%}
+  {
+    "id": {{ group.id | json }},
+    "name": {{ group.name | json }},
+    "plans": [
+      {%- for plan in group.selling_plans -%}
+        {%- unless forloop.first -%},{%- endunless -%}
+        { "id": {{ plan.id | json }}, "name": {{ plan.name | json }} }
+      {%- endfor -%}
+    ]
+  }
+{%- endfor -%}
+]
+{% endcapture %}
+
+<script type="application/json" id="subbulk-config">
+{
+  "moneyFormat": {{ shop.money_format | json }},
+  "currency": {{ cart.currency.iso_code | default: shop.currency | json }},
+  "variantId": {{ product.selected_or_first_available_variant.id | json }},
+  "bulkTiers": {% if product.metafields.app.bulk_pricing.value %}{{ product.metafields.app.bulk_pricing.value | json }}{% else %}[]{% endif %},
+  "sellingPlanGroups": {{ selling_groups_json | strip_newlines }},
+  "subscriptionPercent": {{ block.settings.subscription_percent | default: 10 }},
+  "subscriptionFixed": {{ block.settings.subscription_fixed | default: 0 }},
+  "discountMode": {{ block.settings.discount_mode | default: 'percent' | json }}
+}
+</script>
+
+<div
+  class="subbulk-root"
+  id="subbulk-root-{{ block.id }}"
+  data-subbulk-block="{{ block.id }}"
+></div>
+
+{% schema %}
+{
+  "name": "SubBulk buy box",
+  "target": "section",
+  "stylesheet": "subbulk-widget.css",
+  "javascript": "subbulk-widget.js",
+  "templates": ["product"],
+  "settings": [
+    {
+      "type": "select",
+      "id": "discount_mode",
+      "label": "Preview discount (UI)",
+      "options": [
+        { "value": "percent", "label": "Phần trăm" },
+        { "value": "fixed", "label": "Fixed trên tổng" }
+      ],
+      "default": "percent",
+      "info": "Selling plan thật do Shopify tính. Cài đặt này cho phần preview số trong widget."
+    },
+    {
+      "type": "number",
+      "id": "subscription_percent",
+      "label": "Preview % subscription",
+      "default": 10
+    },
+    {
+      "type": "number",
+      "id": "subscription_fixed",
+      "label": "Preview fixed ($) trên tổng",
+      "default": 2
+    }
+  ]
+}
+{% endschema %}

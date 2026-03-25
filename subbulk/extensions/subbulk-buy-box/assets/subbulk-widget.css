@@ -1,0 +1,233 @@
+.subbulk {
+  --subbulk-red: #d73c35;
+  --subbulk-green: #2e7d32;
+  --subbulk-yellow: #f5a623;
+  --subbulk-grey: #e8e8e8;
+  --subbulk-text: #333;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
+  color: var(--subbulk-text);
+  font-size: 14px;
+  line-height: 1.4;
+  max-width: 480px;
+  margin-top: 12px;
+}
+
+.subbulk__header-price {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 12px;
+  margin-bottom: 12px;
+}
+
+.subbulk__price-current {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--subbulk-red);
+}
+
+.subbulk__price-compare {
+  text-decoration: line-through;
+  color: #888;
+  font-size: 1rem;
+}
+
+.subbulk__badge-save {
+  background: var(--subbulk-red);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 3px;
+}
+
+.subbulk__heading-red {
+  color: var(--subbulk-red);
+  font-weight: 700;
+  font-size: 15px;
+  margin: 16px 0 6px;
+}
+
+.subbulk__subheading {
+  color: #777;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.subbulk__options {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.subbulk__option {
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  padding: 12px 14px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+  cursor: pointer;
+  background: #fff;
+}
+
+.subbulk__option--active {
+  border-color: var(--subbulk-green);
+  border-width: 2px;
+  padding: 11px 13px;
+  box-shadow: 0 0 0 1px var(--subbulk-green);
+}
+
+.subbulk__option input {
+  justify-self: start;
+}
+
+.subbulk__option-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.subbulk__pill-save {
+  background: var(--subbulk-yellow);
+  color: #222;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 2px;
+}
+
+.subbulk__option-price {
+  font-weight: 600;
+  text-align: right;
+}
+
+.subbulk__deliver {
+  margin-top: 10px;
+}
+
+.subbulk__deliver select {
+  width: 100%;
+  padding: 8px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
+  margin-top: 4px;
+}
+
+.subbulk__details-row {
+  margin-top: 10px;
+  font-size: 13px;
+  color: #555;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.subbulk__footer-powered {
+  text-align: right;
+  font-size: 11px;
+  color: #999;
+  margin-top: 4px;
+}
+
+.subbulk__table-wrap {
+  margin-top: 14px;
+  border: 1px solid var(--subbulk-grey);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.subbulk__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.subbulk__table th {
+  background: #f4f4f4;
+  text-align: left;
+  padding: 8px 10px;
+  font-weight: 600;
+}
+
+.subbulk__table td {
+  padding: 8px 10px;
+  border-top: 1px solid #eee;
+}
+
+.subbulk__table tr:nth-child(even) td {
+  background: #fafafa;
+}
+
+.subbulk__table tr.subbulk__tier--active td {
+  color: var(--subbulk-red);
+  font-weight: 600;
+}
+
+.subbulk__qty-total {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 14px;
+  align-items: end;
+}
+
+.subbulk__stepper {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  overflow: hidden;
+  max-width: 140px;
+}
+
+.subbulk__stepper button {
+  width: 36px;
+  height: 40px;
+  border: none;
+  background: #f5f5f5;
+  cursor: pointer;
+  font-size: 18px;
+}
+
+.subbulk__stepper input {
+  width: 48px;
+  border: none;
+  text-align: center;
+  font-size: 15px;
+}
+
+.subbulk__total-box {
+  border: 2px solid var(--subbulk-green);
+  border-radius: 6px;
+  padding: 10px 12px;
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.subbulk__savings {
+  color: var(--subbulk-green);
+  font-size: 13px;
+  font-weight: 600;
+  margin-top: 8px;
+}
+
+.subbulk__shipping {
+  margin-top: 12px;
+  font-size: 13px;
+  color: #555;
+}
+
+.subbulk__shipping a {
+  color: var(--subbulk-red);
+}
+
+.subbulk__hint {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #777;
+}

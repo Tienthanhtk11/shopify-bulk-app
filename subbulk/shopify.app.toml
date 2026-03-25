@@ -1,0 +1,38 @@
+# Cấu hình SubBulk — sau khi clone, chạy `shopify app config link` để gán client_id.
+name = "SubBulk"
+handle = "subbulk"
+client_id = ""
+application_url = "https://example.com"
+embedded = true
+
+[access_scopes]
+# write_app_proxy: portal khách qua app proxy
+scopes = "write_products,read_products,write_purchase_options,read_purchase_options,read_own_subscription_contracts,write_own_subscription_contracts,read_customers,read_orders,write_app_proxy"
+
+[auth]
+redirect_urls = [ "https://example.com/api/auth" ]
+
+[webhooks]
+api_version = "2025-01"
+
+  [[webhooks.subscriptions]]
+  uri = "/webhooks/app/uninstalled"
+  topics = ["app/uninstalled"]
+
+  [[webhooks.subscriptions]]
+  topics = ["app/scopes_update"]
+  uri = "/webhooks/app/scopes_update"
+
+# Metafield JSON bulk pricing (tier) — merchant sửa trong Admin sản phẩm.
+[product.metafields.app.bulk_pricing]
+type = "json"
+name = "SubBulk bulk pricing"
+description = "Mảng JSON: qtyBreakpoint, priceAfterDiscount, bulkPrice"
+access.admin = "merchant_read_write"
+access.storefront = "public_read"
+
+# Portal khách: https://{shop}/apps/subbulk/...
+[app_proxy]
+url = "/apps/subbulk"
+prefix = "apps"
+subpath = "subbulk"

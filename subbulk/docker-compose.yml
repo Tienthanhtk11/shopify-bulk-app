@@ -1,0 +1,20 @@
+# VM / dev store: copy .env từ .env.example, điền Shopify, rồi:
+#   docker compose up --build
+#
+# SHOPIFY_APP_URL phải là URL công khai tới cổng 3000 (reverse proxy hoặc tunnel).
+
+services:
+  subbulk:
+    build: .
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: file:/app/data/subbulk.sqlite
+    volumes:
+      - subbulk-sqlite:/app/data
+    restart: unless-stopped
+
+volumes:
+  subbulk-sqlite:
