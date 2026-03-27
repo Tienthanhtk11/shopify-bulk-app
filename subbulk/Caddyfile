@@ -1,0 +1,15 @@
+# Giống stack app cũ: HTTPS app.thanhpt.online → container subbulk:3000
+erp.thanhpt.online {
+  encode gzip zstd
+  reverse_proxy host.docker.internal:8080
+}
+
+thanhpt.online {
+  encode gzip zstd
+  reverse_proxy subbulk:3000
+}
+
+app.thanhpt.online {
+  encode gzip zstd
+  reverse_proxy subbulk:3000
+}

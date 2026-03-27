@@ -3,12 +3,12 @@
 # Build:
 #   docker build -t subbulk .
 #
-# Chạy (thay URL & secret; volume giữ SQLite giữa các lần restart):
+# Chạy (thay URL, secret, DATABASE_URL Postgres):
 #   docker run --rm -p 3000:3000 \
 #     -e SHOPIFY_API_KEY=xxx -e SHOPIFY_API_SECRET=xxx \
 #     -e SCOPES='read_products,write_products,...' \
 #     -e SHOPIFY_APP_URL=https://your-domain.example \
-#     -v subbulk-data:/app/data \
+#     -e DATABASE_URL=postgresql://user:pass@host:5432/db?schema=public \
 #     subbulk
 #
 # Hoặc: docker compose up --build (cần file .env từ .env.example)
@@ -29,7 +29,7 @@ RUN npm ci
 FROM deps AS builder
 COPY . .
 # generate không cần DB thật nhưng schema dùng env("DATABASE_URL")
-ENV DATABASE_URL=file:dev.sqlite
+ENV DATABASE_URL=postgresql://subbulk:build@localhost:5432/subbulk?schema=public
 RUN npx prisma generate
 ENV NODE_ENV=production
 RUN npm run build
@@ -45,10 +45,9 @@ RUN npm ci --omit=dev && npm cache clean --force
 COPY prisma ./prisma
 COPY --from=builder /app/build ./build
 
-# SQLite trên volume riêng (không mount đè cả /app/prisma → vẫn giữ migrations trong image)
-ENV DATABASE_URL=file:/app/data/subbulk.sqlite
-RUN mkdir -p /app/data \
-  && npx prisma generate \
+# Runtime: DATABASE_URL do docker-compose / -e cung cấp (Postgres)
+ENV DATABASE_URL=postgresql://subbulk:runtime@localhost:5432/subbulk?schema=public
+RUN npx prisma generate \
   && chown -R node:node /app
 
 USER node

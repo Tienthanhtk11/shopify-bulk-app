@@ -2,6 +2,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { redirect } from "@remix-run/node";
 import {
   Form,
+  Link,
   useActionData,
   useLoaderData,
   useNavigation,
@@ -20,6 +21,7 @@ import {
 import { TitleBar } from "@shopify/app-bridge-react";
 import { useState, useCallback } from "react";
 import { authenticate } from "../shopify.server";
+import { getOrCreateWidgetSettings } from "../models/widget-settings.server";
 import { createOfferWithSellingPlans } from "../models/subscription-offer.server";
 
 const DEFAULT_INTERVALS = [
@@ -28,8 +30,15 @@ const DEFAULT_INTERVALS = [
 ];
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  await authenticate.admin(request);
-  return { defaultIntervalsJson: JSON.stringify(DEFAULT_INTERVALS) };
+  const { session } = await authenticate.admin(request);
+  const ws = await getOrCreateWidgetSettings(session.shop);
+  const defaultDiscountType =
+    ws.defaultSubscriptionDiscountType === "FIXED" ? "FIXED" : "PERCENTAGE";
+  return {
+    defaultIntervalsJson: JSON.stringify(DEFAULT_INTERVALS),
+    defaultDiscountType,
+    defaultDiscountValue: ws.defaultSubscriptionDiscountValue || "10",
+  };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -76,15 +85,19 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function NewOffer() {
-  const { defaultIntervalsJson } = useLoaderData<typeof loader>();
+  const {
+    defaultIntervalsJson,
+    defaultDiscountType,
+    defaultDiscountValue,
+  } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const nav = useNavigation();
   const busy = nav.state !== "idle";
 
   const [title, setTitle] = useState("");
   const [productGid, setProductGid] = useState("");
-  const [discountType, setDiscountType] = useState("PERCENTAGE");
-  const [discountValue, setDiscountValue] = useState("10");
+  const [discountType, setDiscountType] = useState(defaultDiscountType);
+  const [discountValue, setDiscountValue] = useState(defaultDiscountValue);
   const [intervalsJson, setIntervalsJson] = useState(defaultIntervalsJson);
 
   const pickProduct = useCallback(() => {
@@ -114,6 +127,15 @@ export default function NewOffer() {
     <Page backAction={{ url: "/app/offers" }}>
       <TitleBar title="Tạo subscription offer" />
       <BlockStack gap="400">
+        <Banner tone="info" title="Gợi ý">
+          <p>
+            Thông thường hãy dùng{" "}
+            <Link to="/app/subscription-rule">Thiết lập đăng ký</Link> (rule →
+            danh sách sản phẩm → selling plan chung). Trang này chỉ khi cần{" "}
+            <strong>một</strong> selling plan group cho <strong>một</strong>{" "}
+            sản phẩm (legacy).
+          </p>
+        </Banner>
         {actionData?.error ? (
           <Banner tone="critical" title="Không lưu được">
             <p>{actionData.error}</p>

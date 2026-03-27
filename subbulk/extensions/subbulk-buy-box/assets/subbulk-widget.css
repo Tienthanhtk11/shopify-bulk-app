@@ -4,6 +4,8 @@
   --subbulk-yellow: #f5a623;
   --subbulk-grey: #e8e8e8;
   --subbulk-text: #333;
+  --subbulk-radius: 6px;
+  --subbulk-border-width: 1px;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial,
     sans-serif;
   color: var(--subbulk-text);
@@ -39,7 +41,7 @@
   font-size: 12px;
   font-weight: 600;
   padding: 4px 8px;
-  border-radius: 3px;
+  border-radius: calc(var(--subbulk-radius) / 2);
 }
 
 .subbulk__heading-red {
@@ -62,8 +64,8 @@
 }
 
 .subbulk__option {
-  border: 1px solid #ccc;
-  border-radius: 6px;
+  border: var(--subbulk-border-width) solid #ccc;
+  border-radius: var(--subbulk-radius);
   padding: 12px 14px;
   display: grid;
   grid-template-columns: 1fr auto;
@@ -75,7 +77,7 @@
 
 .subbulk__option--active {
   border-color: var(--subbulk-green);
-  border-width: 2px;
+  border-width: calc(var(--subbulk-border-width) + 1px);
   padding: 11px 13px;
   box-shadow: 0 0 0 1px var(--subbulk-green);
 }
@@ -97,7 +99,7 @@
   font-size: 11px;
   font-weight: 700;
   padding: 2px 6px;
-  border-radius: 2px;
+  border-radius: calc(var(--subbulk-radius) / 2);
 }
 
 .subbulk__option-price {
@@ -112,8 +114,8 @@
 .subbulk__deliver select {
   width: 100%;
   padding: 8px;
-  border-radius: 4px;
-  border: 1px solid #ccc;
+  border-radius: var(--subbulk-radius);
+  border: var(--subbulk-border-width) solid #ccc;
   margin-top: 4px;
 }
 
@@ -135,8 +137,8 @@
 
 .subbulk__table-wrap {
   margin-top: 14px;
-  border: 1px solid var(--subbulk-grey);
-  border-radius: 6px;
+  border: var(--subbulk-border-width) solid var(--subbulk-grey);
+  border-radius: var(--subbulk-radius);
   overflow: hidden;
 }
 
@@ -179,8 +181,8 @@
   display: flex;
   align-items: center;
   gap: 0;
-  border: 1px solid #ccc;
-  border-radius: 4px;
+  border: var(--subbulk-border-width) solid #ccc;
+  border-radius: var(--subbulk-radius);
   overflow: hidden;
   max-width: 140px;
 }
@@ -202,8 +204,8 @@
 }
 
 .subbulk__total-box {
-  border: 2px solid var(--subbulk-green);
-  border-radius: 6px;
+  border: calc(var(--subbulk-border-width) + 1px) solid var(--subbulk-green);
+  border-radius: var(--subbulk-radius);
   padding: 10px 12px;
   font-weight: 700;
   font-size: 16px;
@@ -230,4 +232,21 @@
   margin-top: 10px;
   font-size: 12px;
   color: #777;
+}
+
+.subbulk__cart-disclaimer {
+  font-size: 11px;
+  color: #555;
+  margin-top: 10px;
+  line-height: 1.4;
+  padding: 8px 10px;
+  background: #f7f7f7;
+  border-radius: 4px;
+  border-left: 3px solid #999;
+}
+
+.subbulk__no-bulk-note {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: #666;
 }

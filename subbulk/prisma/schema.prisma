@@ -9,8 +9,7 @@ generator client {
 // enough when changing adapters.
 // See https://www.prisma.io/docs/orm/reference/prisma-schema-reference#string for more information
 datasource db {
-  provider = "sqlite"
-  /// Local: file:dev.sqlite (relative to this schema folder). Docker: file:/app/data/subbulk.sqlite
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -32,6 +31,27 @@ model Session {
   emailVerified       Boolean?  @default(false)
   refreshToken        String?
   refreshTokenExpires DateTime?
+}
+
+/// Một rule subscribe chung (kiểu Seal): một selling plan group trên Shopify gắn nhiều sản phẩm.
+model SubscriptionRule {
+  id                      String   @id @default(cuid())
+  shop                    String   @unique
+  /// Tên hiển thị (vd. Subscribe & save)
+  title                   String   @default("Subscribe & save")
+  internalName            String?
+  /// Nhãn trước dropdown tần suất (vd. Deliver every)
+  planSelectorLabel       String   @default("Deliver every")
+  discountType            String
+  discountValue           String
+  planIntervalsJson       String   @default("[]")
+  sellingPlanGroupGid     String?
+  defaultSellingPlanGid   String?
+  /// WIDGET_ENABLED = mọi sản phẩm trong WidgetEnabledProduct; EXPLICIT = explicitProductGidsJson
+  productScope            String   @default("WIDGET_ENABLED")
+  explicitProductGidsJson String   @default("[]")
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
 }
 
 /// Gói subscribe gắn 1 product + selling plan group trên Shopify.
@@ -60,8 +80,32 @@ model WidgetSettings {
   purchaseOptionsLabel String   @default("Purchase options")
   primaryColorHex      String   @default("#D73C35")
   accentGreenHex       String   @default("#2E7D32")
+  fontFamily           String   @default("system-ui, -apple-system, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif")
+  borderRadiusPx       Int      @default(6)
+  borderThicknessPx    Int      @default(1)
+  showSavingsBadge     Boolean  @default(true)
+  showCompareAtPrice   Boolean  @default(true)
+  showSubscriptionDetails Boolean @default(true)
+  customCssEnabled     Boolean  @default(false)
+  customCss            String   @default("")
   subscriptionFooter   String   @default("Powered by SubBulk")
   freeShippingNote     String   @default("Free Shipping on all orders over $99.99")
+  /// Mặc định khi tạo subscription offer: PERCENTAGE | FIXED
+  defaultSubscriptionDiscountType  String @default("PERCENTAGE")
+  /// Chuỗi số (phần trăm hoặc số tiền tuỳ type)
+  defaultSubscriptionDiscountValue String @default("10")
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
+}
+
+/// Sản phẩm được phép hiển thị widget (đồng bộ metafield app.subbulk_widget_enabled).
+model WidgetEnabledProduct {
+  id           String   @id @default(cuid())
+  shop         String
+  productGid   String
+  productTitle String?
+  createdAt    DateTime @default(now())
+
+  @@unique([shop, productGid])
+  @@index([shop])
 }

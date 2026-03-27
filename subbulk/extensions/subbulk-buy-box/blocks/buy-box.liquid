@@ -1,7 +1,17 @@
 {% comment %}
-  SubBulk — đặt trong section sản phẩm, sát buy box.
+  SubBulk — app block target: section.
+  Đặt trong section Product information (main-product), kéo block lên **trên** "Buy buttons".
+  Tránh để block nằm trong section "Apps" riêng (full width, tách khỏi cột giá/nút mua).
+  App-owned product metafields được đọc qua reserved namespace `$app` trong theme app extensions.
+  Bulk pricing: mỗi sản phẩm một metafield JSON riêng; fallback legacy tiers nếu có.
 {% endcomment %}
 
+{% liquid
+  assign subbulk_bulk_tiers = product.metafields["$app"].bulk_pricing.value
+  if subbulk_bulk_tiers == blank
+    assign subbulk_bulk_tiers = product.metafields["$app"].sb_widget_tiers.value
+  endif
+%}
 {% capture selling_groups_json %}
 [
 {%- for group in product.selling_plan_groups -%}
@@ -20,13 +30,39 @@
 ]
 {% endcapture %}
 
-<script type="application/json" id="subbulk-config">
+{% comment %}
+  Giá đăng ký trên giỏ/checkout = Shopify (checkout_charge_amount theo variant + selling plan).
+  Đưa vào config để widget hiển thị đúng thay vì chỉ % preview trên giá tier metafield.
+{% endcomment %}
+{% capture subscription_allocations_json %}
+{
+{%- for variant in product.variants -%}
+  "{{ variant.id }}": {
+    {%- for alloc in variant.selling_plan_allocations -%}
+      {{ alloc.selling_plan.id | json }}: {
+        "checkout": {{ alloc.checkout_charge_amount | divided_by: 100.0 | json }},
+        "compareAt": {{ alloc.compare_at_price | divided_by: 100.0 | json }}
+      }{%- unless forloop.last -%},{%- endunless -%}
+    {%- endfor -%}
+  }{%- unless forloop.last -%},{%- endunless -%}
+{%- endfor -%}
+}
+{% endcapture %}
+
+<script type="application/json" id="subbulk-config-{{ block.id }}">
 {
   "moneyFormat": {{ shop.money_format | json }},
   "currency": {{ cart.currency.iso_code | default: shop.currency | json }},
   "variantId": {{ product.selected_or_first_available_variant.id | json }},
-  "bulkTiers": {% if product.metafields.app.bulk_pricing.value %}{{ product.metafields.app.bulk_pricing.value | json }}{% else %}[]{% endif %},
+  "variantUnitPrice": {{ product.selected_or_first_available_variant.price | divided_by: 100.0 | json }},
+  "variantPrices": [
+    {%- for variant in product.variants -%}
+      { "id": {{ variant.id | json }}, "price": {{ variant.price | divided_by: 100.0 | json }} }{%- unless forloop.last -%},{%- endunless -%}
+    {%- endfor -%}
+  ],
+  "bulkTiers": {% if subbulk_bulk_tiers != blank %}{{ subbulk_bulk_tiers | json }}{% else %}[]{% endif %},
   "sellingPlanGroups": {{ selling_groups_json | strip_newlines }},
+  "subscriptionAllocations": {{ subscription_allocations_json | strip_newlines }},
   "subscriptionPercent": {{ block.settings.subscription_percent | default: 10 }},
   "subscriptionFixed": {{ block.settings.subscription_fixed | default: 0 }},
   "discountMode": {{ block.settings.discount_mode | default: 'percent' | json }}
@@ -37,16 +73,27 @@
   class="subbulk-root"
   id="subbulk-root-{{ block.id }}"
   data-subbulk-block="{{ block.id }}"
+  data-subbulk-config-id="subbulk-config-{{ block.id }}"
 ></div>
 
 {% schema %}
 {
-  "name": "SubBulk buy box",
+  "name": "SubBulk purchase options",
   "target": "section",
   "stylesheet": "subbulk-widget.css",
   "javascript": "subbulk-widget.js",
-  "templates": ["product"],
+  "enabled_on": {
+    "templates": ["product"]
+  },
   "settings": [
+    {
+      "type": "header",
+      "content": "Vị trí hiển thị"
+    },
+    {
+      "type": "paragraph",
+      "content": "Trong app SubBulk → **Sản phẩm widget**: chỉ sản phẩm trong danh sách mới hiện widget. Đặt block trong **Product information**, phía trên **Buy buttons**."
+    },
     {
       "type": "select",
       "id": "discount_mode",
@@ -56,7 +103,7 @@
         { "value": "fixed", "label": "Fixed trên tổng" }
       ],
       "default": "percent",
-      "info": "Selling plan thật do Shopify tính. Cài đặt này cho phần preview số trong widget."
+      "info": "Giá giỏ đăng ký = Selling plan Shopify. %/fixed preview: sau khi lưu trong app Widget, storefront gọi App Proxy /apps/subbulk/subscription-preview và ghi đè các ô dưới."
     },
     {
       "type": "number",

@@ -1,37 +1,57 @@
-# Cấu hình SubBulk — sau khi clone, chạy `shopify app config link` để gán client_id.
-name = "SubBulk"
-handle = "subbulk"
-client_id = ""
-application_url = "https://example.com"
+# Đồng bộ từ app cũ (subscription-bulk-app): cùng client_id + app.thanhpt.online + OAuth /auth/callback.
+# Scopes theo SubBulk (purchase options + app proxy). Sau deploy, merchant có thể cần chấp nhận quyền mới trên dev store.
+name = "subscription-bulk-app"
+client_id = "e63acd707bf5ecdcda21c3c49633917e"
+application_url = "https://app.thanhpt.online"
 embedded = true
 
+[build]
+automatically_update_urls_on_dev = true
+
 [access_scopes]
-# write_app_proxy: portal khách qua app proxy
-scopes = "write_products,read_products,write_purchase_options,read_purchase_options,read_own_subscription_contracts,write_own_subscription_contracts,read_customers,read_orders,write_app_proxy"
+scopes = "write_products,read_products,read_themes,write_purchase_options,read_purchase_options,read_own_subscription_contracts,write_own_subscription_contracts,read_customers,read_orders,write_app_proxy"
 
 [auth]
-redirect_urls = [ "https://example.com/api/auth" ]
+redirect_urls = [ "https://app.thanhpt.online/auth/callback" ]
 
 [webhooks]
 api_version = "2025-01"
 
   [[webhooks.subscriptions]]
   uri = "/webhooks/app/uninstalled"
-  topics = ["app/uninstalled"]
+  topics = [ "app/uninstalled" ]
 
   [[webhooks.subscriptions]]
-  topics = ["app/scopes_update"]
+  topics = [ "app/scopes_update" ]
   uri = "/webhooks/app/scopes_update"
 
-# Metafield JSON bulk pricing (tier) — merchant sửa trong Admin sản phẩm.
-[product.metafields.app.bulk_pricing]
-type = "json"
-name = "SubBulk bulk pricing"
-description = "Mảng JSON: qtyBreakpoint, priceAfterDiscount, bulkPrice"
+# Bật trong app SubBulk → chỉ sản phẩm true mới render block theme
+[product.metafields.app.subbulk_widget_enabled]
+type = "boolean"
+name = "SubBulk: hiển thị widget"
+description = "Quản lý trong app SubBulk (Sản phẩm widget). Bật = hiện purchase widget trên storefront."
 access.admin = "merchant_read_write"
 access.storefront = "public_read"
 
-# Portal khách: https://{shop}/apps/subbulk/...
+# Metafield bulk (app mới) — JSON có bulkPrice theo spec
+[product.metafields.app.bulk_pricing]
+type = "json"
+name = "SubBulk bulk pricing"
+description = "Mảng JSON: qtyBreakpoint, priceAfterDiscount, bulkPrice (tuỳ chọn bulkPrice). Sửa trong app SubBulk hoặc trang sản phẩm Admin → Metafields."
+access.admin = "merchant_read_write"
+access.storefront = "public_read"
+
+# Giữ định nghĩa từ app cũ (widget tiers) để dữ liệu sản phẩm không mất
+[product.metafields.app.sb_widget_tiers]
+type = "json"
+name = "SB widget volume tiers"
+description = "JSON array: qtyBreakpoint, priceAfterDiscount (legacy widget)"
+access.admin = "merchant_read_write"
+access.storefront = "public_read"
+
+# Phần sau /apps/subbulk/ trên storefront được nối vào url này.
+# url chỉ là root app → Shopify gọi /subscription-preview → 404 (không khớp route Remix).
+# Đặt url = /apps/subbulk để /apps/subbulk/subscription-preview → …/apps/subbulk/subscription-preview
 [app_proxy]
 url = "/apps/subbulk"
 prefix = "apps"

@@ -10,6 +10,7 @@ import {
   EmptyState,
   Box,
   Divider,
+  Banner,
 } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { authenticate } from "../shopify.server";
@@ -32,6 +33,13 @@ export default function OffersIndex() {
         </Link>
       </TitleBar>
       <BlockStack gap="400">
+        <Banner tone="info" title="Luồng mới: Thiết lập đăng ký">
+          <p>
+            Tạo rule → danh sách sản phẩm → selling plan chung tại{" "}
+            <Link to="/app/subscription-rule">Thiết lập đăng ký</Link>. Trang
+            offers từng SKU chỉ dùng khi cần legacy.
+          </p>
+        </Banner>
         {offers.length === 0 ? (
           <Card>
             <EmptyState
@@ -43,8 +51,10 @@ export default function OffersIndex() {
               image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
             >
               <p>
-                Mỗi offer tạo một selling plan group trên Shopify và gắn vào
-                sản phẩm bạn chọn.
+                Luồng mới: dùng{" "}
+                <Link to="/app/subscription-rule">Thiết lập đăng ký</Link> (một
+                rule + danh sách SP + selling plan chung). Legacy offer: một
+                group cho từng sản phẩm.
               </p>
             </EmptyState>
           </Card>

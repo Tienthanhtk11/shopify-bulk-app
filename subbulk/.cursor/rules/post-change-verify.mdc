@@ -1,0 +1,14 @@
+---
+description: Sau khi sửa code subbulk, tự verify bằng build hoặc Docker
+globs: "**/*.{ts,tsx,js,jsx,liquid}"
+alwaysApply: false
+---
+
+# Sau khi chỉnh sửa code (subbulk)
+
+Khi kết thúc thay đổi trong repo **subbulk** (app Remix, extension theme, Prisma, v.v.):
+
+1. Chạy **`npm run build`** trong thư mục `subbulk` để bắt lỗi TypeScript/build trước khi coi task xong (trừ khi chỉ sửa tài liệu thuần).
+2. Nếu thay đổi ảnh hưởng runtime trên server đang dùng Docker, chạy **`docker compose up -d --build`** từ `subbulk` để image/container nhận bản mới — không chỉ nhắc user tự chạy.
+
+Không cần deploy Shopify (`shopify app deploy`) mỗi lần trừ khi user yêu cầu hoặc đổi extension cần lên Partner Dashboard.

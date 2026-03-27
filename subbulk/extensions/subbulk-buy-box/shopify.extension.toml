@@ -1,6 +1,7 @@
 api_version = "2025-01"
 
 [[extensions]]
+uid = "61e0caeb-7761-69f6-6167-332a834d299641f2a399"
 type = "theme"
 name = "SubBulk buy box"
 handle = "subbulk-buy-box"

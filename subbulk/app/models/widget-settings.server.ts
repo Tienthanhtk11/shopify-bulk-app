@@ -13,8 +13,18 @@ export async function updateWidgetSettings(
     purchaseOptionsLabel?: string;
     primaryColorHex?: string;
     accentGreenHex?: string;
+    fontFamily?: string;
+    borderRadiusPx?: number;
+    borderThicknessPx?: number;
+    showSavingsBadge?: boolean;
+    showCompareAtPrice?: boolean;
+    showSubscriptionDetails?: boolean;
+    customCssEnabled?: boolean;
+    customCss?: string;
     subscriptionFooter?: string;
     freeShippingNote?: string;
+    defaultSubscriptionDiscountType?: string;
+    defaultSubscriptionDiscountValue?: string;
   },
 ) {
   await getOrCreateWidgetSettings(shop);

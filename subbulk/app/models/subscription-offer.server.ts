@@ -5,6 +5,10 @@ export type PlanIntervalConfig = {
   interval: "DAY" | "WEEK" | "MONTH";
   intervalCount: number;
   label: string;
+  name?: string;
+  description?: string;
+  discountType?: "PERCENTAGE" | "FIXED";
+  discountValue?: number;
 };
 
 export async function listOffers(shop: string) {
@@ -22,6 +26,78 @@ export async function deleteOffer(shop: string, id: string) {
   return prisma.subscriptionOffer.deleteMany({ where: { shop, id } });
 }
 
+/** Lấy toàn bộ variant GID của product (tối đa 250) để gắn selling plan đúng từng variant. */
+export async function fetchProductVariantGids(
+  admin: AdminApiContext,
+  productGid: string,
+): Promise<string[]> {
+  const res = await admin.graphql(
+    `#graphql
+    query SubBulkProductVariants($id: ID!) {
+      product(id: $id) {
+        id
+        variants(first: 250) {
+          nodes { id }
+        }
+      }
+    }`,
+    { variables: { id: productGid } },
+  );
+  const json = await res.json();
+  if (!json.data?.product?.id) {
+    throw new Error("Không tìm thấy sản phẩm trên Shopify (kiểm tra Product GID).");
+  }
+  const nodes = json.data.product.variants?.nodes ?? [];
+  return nodes
+    .map((n: { id?: string }) => n?.id)
+    .filter((id: string | undefined): id is string => Boolean(id));
+}
+
+/**
+ * SubBulk cho phép mua một lần + đăng ký. Một số cửa hàng sau sellingPlanGroupCreate
+ * bị `requiresSellingPlan: true` → theme hiện Sold out cho nút mua thường.
+ */
+export async function ensureProductAllowsOneTimePurchase(
+  admin: AdminApiContext,
+  productGid: string,
+) {
+  const res = await admin.graphql(
+    `#graphql
+    query SubBulkProductRequiresPlan($id: ID!) {
+      product(id: $id) {
+        id
+        requiresSellingPlan
+      }
+    }`,
+    { variables: { id: productGid } },
+  );
+  const json = await res.json();
+  const requires = json.data?.product?.requiresSellingPlan === true;
+  if (!requires) return;
+
+  const upd = await admin.graphql(
+    `#graphql
+    mutation SubBulkProductAllowOnetime($input: ProductInput!) {
+      productUpdate(input: $input) {
+        product { id requiresSellingPlan }
+        userErrors { field message }
+      }
+    }`,
+    {
+      variables: {
+        input: { id: productGid, requiresSellingPlan: false },
+      },
+    },
+  );
+  const uj = await upd.json();
+  const errs = uj.data?.productUpdate?.userErrors ?? [];
+  if (errs.length) {
+    throw new Error(
+      errs.map((e: { message: string }) => e.message).join("; "),
+    );
+  }
+}
+
 /** Tạo Selling plan group trên Shopify + lưu DB. */
 export async function createOfferWithSellingPlans(
   admin: AdminApiContext,
@@ -34,6 +110,11 @@ export async function createOfferWithSellingPlans(
     planIntervals: PlanIntervalConfig[];
   },
 ) {
+  const variantGids = await fetchProductVariantGids(admin, input.productGid);
+  if (!variantGids.length) {
+    throw new Error("Sản phẩm không có variant — không tạo được selling plan.");
+  }
+
   const planIntervals = input.planIntervals.length
     ? input.planIntervals
     : [{ interval: "MONTH" as const, intervalCount: 1, label: "1 month" }];
@@ -93,7 +174,7 @@ export async function createOfferWithSellingPlans(
     },
     resources: {
       productIds: [input.productGid],
-      productVariantIds: [],
+      productVariantIds: variantGids,
     },
   };
 
@@ -124,6 +205,8 @@ export async function createOfferWithSellingPlans(
   if (!group?.id) {
     throw new Error("Không tạo được selling plan group");
   }
+
+  await ensureProductAllowsOneTimePurchase(admin, input.productGid);
 
   const plans = group.sellingPlans?.nodes ?? [];
   const defaultSellingPlanGid = plans[0]?.id ?? null;

@@ -1,0 +1,5 @@
+# Theme Check chạy khi shopify app deploy — nới ngưỡng JS block (gzip) cho widget đầy đủ tính năng.
+AssetSizeAppBlockJavaScript:
+  enabled: true
+  severity: warning
+  threshold_in_bytes: 20000
