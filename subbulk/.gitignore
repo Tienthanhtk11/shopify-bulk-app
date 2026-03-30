@@ -25,6 +25,7 @@ query_product.js
 test_cart_again.js
 test_cart_query.js
 test_discounts.js
+test_discounts.ts
 test_discounts_2.js
 test_product.mjs
 
