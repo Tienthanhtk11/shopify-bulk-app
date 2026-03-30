@@ -67,10 +67,7 @@
   border: var(--subbulk-border-width) solid #ccc;
   border-radius: var(--subbulk-radius);
   padding: 12px 14px;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 8px;
-  align-items: center;
+  display: block;
   cursor: pointer;
   background: #fff;
 }
@@ -80,6 +77,13 @@
   border-width: calc(var(--subbulk-border-width) + 1px);
   padding: 11px 13px;
   box-shadow: 0 0 0 1px var(--subbulk-green);
+}
+
+.subbulk__option-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .subbulk__option input {
@@ -105,6 +109,31 @@
 .subbulk__option-price {
   font-weight: 600;
   text-align: right;
+  white-space: nowrap;
+}
+
+.subbulk__deliver-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 8px;
+}
+
+.subbulk__deliver-label {
+  font-size: 13px;
+  color: #555;
+  white-space: nowrap;
+}
+
+.subbulk__deliver-select {
+  padding: 6px 10px;
+  border-radius: var(--subbulk-radius);
+  border: var(--subbulk-border-width) solid #ccc;
+  font-size: 13px;
+  background: #fff;
+  cursor: pointer;
+  min-width: 120px;
 }
 
 .subbulk__deliver {
@@ -234,6 +263,30 @@
   color: #777;
 }
 
+.subbulk__portal-cta {
+  margin-top: 14px;
+}
+
+.subbulk__portal-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: var(--subbulk-border-width) solid var(--subbulk-red);
+  color: var(--subbulk-red);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 700;
+  transition: background-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+
+.subbulk__portal-link:hover {
+  background: var(--subbulk-red);
+  color: #fff;
+  transform: translateY(-1px);
+}
+
 .subbulk__cart-disclaimer {
   font-size: 11px;
   color: #555;
@@ -249,4 +302,73 @@
   margin: 0 0 12px;
   font-size: 13px;
   color: #666;
+}
+
+.subbulk-account-portal {
+  margin-top: 16px;
+}
+
+.subbulk-account-portal__card {
+  border: var(--subbulk-border-width) solid var(--subbulk-grey);
+  border-radius: calc(var(--subbulk-radius) * 2);
+  padding: 20px;
+  background: linear-gradient(180deg, #fff 0%, #fbfbfb 100%);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.05);
+}
+
+.subbulk-account-portal__eyebrow {
+  margin: 0 0 8px;
+  color: var(--subbulk-red);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.subbulk-account-portal__title {
+  margin: 0 0 8px;
+  font-size: 24px;
+  line-height: 1.1;
+  color: var(--subbulk-text);
+}
+
+.subbulk-account-portal__body {
+  margin: 0 0 16px;
+  color: #555;
+  line-height: 1.6;
+}
+
+.subbulk-account-portal__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 11px 16px;
+  border-radius: 999px;
+  background: var(--subbulk-red);
+  color: #fff;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+@media (max-width: 640px) {
+  .subbulk__qty-total {
+    grid-template-columns: 1fr;
+  }
+
+  .subbulk__option-row,
+  .subbulk__deliver-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .subbulk__option-price,
+  .subbulk__portal-link,
+  .subbulk-account-portal__button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .subbulk__stepper {
+    max-width: 100%;
+  }
 }

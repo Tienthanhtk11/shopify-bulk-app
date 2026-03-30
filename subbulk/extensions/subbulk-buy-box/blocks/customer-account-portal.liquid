@@ -1,0 +1,23 @@
+<div class="subbulk-account-portal">
+  <div class="subbulk-account-portal__card">
+    <p class="subbulk-account-portal__eyebrow">SubBulk subscription portal</p>
+    <h3 class="subbulk-account-portal__title">Manage your recurring orders</h3>
+    <p class="subbulk-account-portal__body">
+      Open your subscription portal to pause, resume, or cancel plans without contacting support.
+    </p>
+    <a class="subbulk-account-portal__button" href="/apps/subbulk/portal">
+      Open subscription portal
+    </a>
+  </div>
+</div>
+
+{% schema %}
+{
+  "name": "SubBulk portal link",
+  "target": "section",
+  "enabled_on": {
+    "templates": ["customers/account"]
+  },
+  "settings": []
+}
+{% endschema %}

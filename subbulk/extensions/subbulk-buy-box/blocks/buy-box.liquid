@@ -2,12 +2,18 @@
   SubBulk — app block target: section.
   Đặt trong section Product information (main-product), kéo block lên **trên** "Buy buttons".
   Tránh để block nằm trong section "Apps" riêng (full width, tách khỏi cột giá/nút mua).
-  App-owned product metafields được đọc qua reserved namespace `$app` trong theme app extensions.
-  Bulk pricing: mỗi sản phẩm một metafield JSON riêng; fallback legacy tiers nếu có.
+  Metafield namespace: dùng literal "app" (primary) vì "$app" reserved namespace không resolve
+  khi metafield được tạo qua Admin API với namespace "app". Fallback "$app" giữ cho tương lai.
 {% endcomment %}
 
 {% liquid
-  assign subbulk_bulk_tiers = product.metafields["$app"].bulk_pricing.value
+  assign subbulk_bulk_tiers = product.metafields.app.bulk_pricing.value
+  if subbulk_bulk_tiers == blank
+    assign subbulk_bulk_tiers = product.metafields.app.sb_widget_tiers.value
+  endif
+  if subbulk_bulk_tiers == blank
+    assign subbulk_bulk_tiers = product.metafields["$app"].bulk_pricing.value
+  endif
   if subbulk_bulk_tiers == blank
     assign subbulk_bulk_tiers = product.metafields["$app"].sb_widget_tiers.value
   endif
@@ -39,7 +45,7 @@
 {%- for variant in product.variants -%}
   "{{ variant.id }}": {
     {%- for alloc in variant.selling_plan_allocations -%}
-      {{ alloc.selling_plan.id | json }}: {
+      "{{ alloc.selling_plan.id }}": {
         "checkout": {{ alloc.checkout_charge_amount | divided_by: 100.0 | json }},
         "compareAt": {{ alloc.compare_at_price | divided_by: 100.0 | json }}
       }{%- unless forloop.last -%},{%- endunless -%}

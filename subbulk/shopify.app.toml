@@ -9,7 +9,7 @@ embedded = true
 automatically_update_urls_on_dev = true
 
 [access_scopes]
-scopes = "write_products,read_products,read_themes,write_purchase_options,read_purchase_options,read_own_subscription_contracts,write_own_subscription_contracts,read_customers,read_orders,write_app_proxy"
+scopes = "write_products,read_products,read_themes,write_purchase_options,read_purchase_options,read_own_subscription_contracts,write_own_subscription_contracts,read_customers,read_orders,write_app_proxy,write_discounts,read_discounts"
 
 [auth]
 redirect_urls = [ "https://app.thanhpt.online/auth/callback" ]

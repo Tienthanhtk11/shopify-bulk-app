@@ -14,6 +14,19 @@ database.sqlite
 .env
 .env.*
 !.env.example
+env_show.txt
+
+# Local credential-bearing test scripts
+check_cart.js
+create_discount.js
+create_discount_2.js
+query_functions.js
+query_product.js
+test_cart_again.js
+test_cart_query.js
+test_discounts.js
+test_discounts_2.js
+test_product.mjs
 
 yarn.lock
 pnpm-lock.yaml

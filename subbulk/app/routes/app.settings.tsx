@@ -73,9 +73,57 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { session, admin } = await authenticate.admin(request);
   const fd = await request.formData();
   const intent = String(fd.get("intent") || "widget");
+
+  if (intent === "enableBulkDiscount") {
+    const functionId = "019d30e2-4e04-76df-8966-381d63b24940";
+    if (!functionId) {
+      return { ok: false, error: "Không tìm thấy Function ID môi trường. Hãy khởi động lại ứng dụng." };
+    }
+
+    try {
+      const response = await admin.graphql(
+        `#graphql
+        mutation discountAutomaticAppCreate($automaticAppDiscount: DiscountAutomaticAppInput!) {
+          discountAutomaticAppCreate(automaticAppDiscount: $automaticAppDiscount) {
+            automaticAppDiscount {
+              discountId
+            }
+            userErrors {
+              field
+              message
+            }
+          }
+        }`,
+        {
+          variables: {
+            automaticAppDiscount: {
+              title: "SubBulk Bulk Pricing (Auto)",
+              functionId,
+              startsAt: new Date().toISOString(),
+            },
+          },
+        }
+      );
+      
+      const responseJson: any = await response.json();
+      
+      // Check for generic GraphQL root errors (like Access Denied/Missing Scopes)
+      if (responseJson.errors && responseJson.errors.length > 0) {
+        return { ok: false, error: "Lỗi GraphQL: " + responseJson.errors.map((e: any) => e.message).join(", ") };
+      }
+
+      const errors = responseJson.data?.discountAutomaticAppCreate?.userErrors;
+      if (errors && errors.length > 0) {
+        return { ok: false, error: "Lỗi tạo Discount: " + errors.map((e: any) => e.message).join(", ") };
+      }
+      return { ok: true, successMsg: "Đã kích hoạt chế độ tự động tính giá Bulk thành công trên toàn bộ cửa hàng!" };
+    } catch (e: any) {
+      return { ok: false, error: e.message || "Lỗi tạo discount" };
+    }
+  }
 
   if (intent === "subscriptionDiscount") {
     const dt = String(
@@ -299,13 +347,15 @@ export default function SettingsPage() {
             <p>{actionData.error}</p>
           </Banner>
         ) : null}
-        {actionData?.ok ? (
+        {actionData && "ok" in actionData && actionData.ok ? (
           <Banner
             tone="success"
             title={
-              actionData.discountSaved
-                ? "Da luu default subscription discount."
-                : "Da luu widget settings."
+              "successMsg" in actionData && actionData.successMsg
+                ? actionData.successMsg
+                : "discountSaved" in actionData && actionData.discountSaved
+                ? "Đã lưu default subscription discount."
+                : "Đã lưu widget settings."
             }
           />
         ) : null}
@@ -562,6 +612,26 @@ export default function SettingsPage() {
                     </Button>
                   </BlockStack>
                 </Form>
+              </BlockStack>
+            </Card>
+
+            <Card>
+              <BlockStack gap="200">
+                <Text as="h2" variant="headingMd">
+                  Backend Configuration (Bulk Pricing)
+                </Text>
+                <Text as="p" variant="bodySm" tone="subdued">
+                  Để tính năng Mua nhiều giảm giá hoạt động chính xác trong quá trình Checkout (kết hợp với Subscriptions), bạn cần kích hoạt Shopify Function của app.
+                  Nhấn nút bên dưới để tạo Automatic Discount gán với hệ thống.
+                </Text>
+                <Box paddingBlockStart="100">
+                  <Form method="post">
+                    <input type="hidden" name="intent" value="enableBulkDiscount" />
+                    <Button submit loading={busy}>
+                      Kích hoạt Bulk Discount (Backend)
+                    </Button>
+                  </Form>
+                </Box>
               </BlockStack>
             </Card>
 

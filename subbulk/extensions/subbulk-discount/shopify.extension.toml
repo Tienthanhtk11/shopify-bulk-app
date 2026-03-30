@@ -1,0 +1,21 @@
+api_version = "2026-01"
+
+[[extensions]]
+name = "t:name"
+handle = "subbulk-discount"
+type = "function"
+uid = "681ad6dd-382d-94ee-5bf5-31508a3935cebe07fc11"
+description = "t:description"
+
+  [[extensions.targeting]]
+  target = "purchase.product-discount.run"
+  input_query = "src/run.graphql"
+  export = "run"
+
+  [extensions.build]
+  command = ""
+  path = "dist/function.wasm"
+
+  [extensions.ui.paths]
+  create = "/"
+  details = "/"

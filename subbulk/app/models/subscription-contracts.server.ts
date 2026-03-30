@@ -14,6 +14,16 @@ export type SubscriptionContractRow = {
   quantity: number;
 };
 
+export type CustomerSubscriptionContractRow = {
+  id: string;
+  shortId: string;
+  status: SubscriptionContractStatus;
+  createdAt: string;
+  nextBillingDate: string | null;
+  lineTitle: string;
+  quantity: number;
+};
+
 type ShopifyContractNode = {
   id?: string;
   status?: SubscriptionContractStatus;
@@ -58,6 +68,30 @@ function mapContractNode(node: ShopifyContractNode): SubscriptionContractRow | n
     nextBillingDate: node.nextBillingDate ?? null,
     customerName: node.customer?.displayName?.trim() || "Unknown customer",
     customerEmail: node.customer?.email?.trim() || "No email",
+    lineTitle: pieces.join(" / ") || "Subscription",
+    quantity:
+      typeof firstLine?.quantity === "number" && Number.isFinite(firstLine.quantity)
+        ? firstLine.quantity
+        : 1,
+  };
+}
+
+function mapCustomerContractNode(
+  node: ShopifyContractNode,
+): CustomerSubscriptionContractRow | null {
+  if (!node.id || !node.status || !SUPPORTED_STATUSES.includes(node.status)) {
+    return null;
+  }
+
+  const firstLine = node.lines?.nodes?.[0];
+  const pieces = [firstLine?.title, firstLine?.variantTitle].filter(Boolean);
+
+  return {
+    id: node.id,
+    shortId: parseContractShortId(node.id),
+    status: node.status,
+    createdAt: node.createdAt ?? new Date(0).toISOString(),
+    nextBillingDate: node.nextBillingDate ?? null,
     lineTitle: pieces.join(" / ") || "Subscription",
     quantity:
       typeof firstLine?.quantity === "number" && Number.isFinite(firstLine.quantity)
@@ -134,6 +168,57 @@ export async function listAdminSubscriptionContracts(
       : new Date(b.createdAt).getTime();
     return bTime - aTime;
   });
+}
+
+export async function listCustomerSubscriptionContracts(
+  admin: AdminApiContext,
+  customerId: string,
+  first = 20,
+) {
+  const res = await admin.graphql(
+    `#graphql
+    query SubBulkCustomerContracts($id: ID!, $first: Int!) {
+      customer(id: $id) {
+        subscriptionContracts(first: $first) {
+          nodes {
+            id
+            status
+            createdAt
+            nextBillingDate
+            lines(first: 1) {
+              nodes {
+                title
+                variantTitle
+                quantity
+              }
+            }
+          }
+        }
+      }
+    }`,
+    {
+      variables: {
+        id: customerId,
+        first,
+      },
+    },
+  );
+
+  const json = await res.json();
+  const nodes = (json.data?.customer?.subscriptionContracts?.nodes ?? []) as ShopifyContractNode[];
+
+  return nodes
+    .map(mapCustomerContractNode)
+    .filter((row): row is CustomerSubscriptionContractRow => row !== null)
+    .sort((a, b) => {
+      const aTime = a.nextBillingDate
+        ? new Date(a.nextBillingDate).getTime()
+        : new Date(a.createdAt).getTime();
+      const bTime = b.nextBillingDate
+        ? new Date(b.nextBillingDate).getTime()
+        : new Date(b.createdAt).getTime();
+      return bTime - aTime;
+    });
 }
 
 export function buildSubscriptionStatusCounts(rows: SubscriptionContractRow[]) {
