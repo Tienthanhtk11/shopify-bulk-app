@@ -20,6 +20,10 @@ import { loginErrorMessage } from "./error.server";
 export const links = () => [{ rel: "stylesheet", href: polarisStyles }];
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
+  if (request.method === "HEAD") {
+    return { errors: {}, polarisTranslations };
+  }
+
   const errors = loginErrorMessage(await login(request));
 
   return { errors, polarisTranslations };
@@ -37,7 +41,7 @@ export default function Auth() {
   const loaderData = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const [shop, setShop] = useState("");
-  const { errors } = actionData || loaderData;
+  const errors = actionData?.errors || loaderData?.errors || {};
 
   return (
     <PolarisAppProvider i18n={loaderData.polarisTranslations}>

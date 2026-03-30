@@ -5,18 +5,34 @@ import { AppProvider } from "@shopify/shopify-app-remix/react";
 import { NavMenu } from "@shopify/app-bridge-react";
 import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
 
+import { getLatestMerchantPlan, upsertMerchantFromSession } from "../models/merchant.server";
+import { merchantCanAccessPath } from "../services/billing.server";
+import { isInternalAdminSession } from "../services/internal-admin.server";
 import { authenticate } from "../shopify.server";
 
 export const links = () => [{ rel: "stylesheet", href: polarisStyles }];
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  await authenticate.admin(request);
+  const { session, redirect } = await authenticate.admin(request);
+  await upsertMerchantFromSession(session);
+  const latestPlan = await getLatestMerchantPlan(session.shop);
+  const { allowed, requiredFeature } = merchantCanAccessPath(
+    new URL(request.url).pathname,
+    latestPlan,
+  );
 
-  return { apiKey: process.env.SHOPIFY_API_KEY || "" };
+  if (!allowed && requiredFeature) {
+    throw redirect(`/app/billing?required=${requiredFeature}`);
+  }
+
+  return {
+    apiKey: process.env.SHOPIFY_API_KEY || "",
+    isInternalAdmin: isInternalAdminSession(session),
+  };
 };
 
 export default function App() {
-  const { apiKey } = useLoaderData<typeof loader>();
+  const { apiKey, isInternalAdmin } = useLoaderData<typeof loader>();
 
   return (
     <AppProvider isEmbeddedApp apiKey={apiKey}>
@@ -24,9 +40,12 @@ export default function App() {
         <Link to="/app/subscriptions" rel="home">
           Subscriptions
         </Link>
+        <Link to="/app/billing">Billing</Link>
         <Link to="/app/subscription-rule">Subscription rule</Link>
         <Link to="/app/settings">Settings</Link>
         <Link to="/app/analytics">Analytics</Link>
+        <Link to="/app/privacy">Privacy</Link>
+        {isInternalAdmin ? <Link to="/app/merchants">Merchants</Link> : null}
       </NavMenu>
       <Outlet />
     </AppProvider>

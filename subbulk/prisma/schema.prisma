@@ -33,6 +33,80 @@ model Session {
   refreshTokenExpires DateTime?
 }
 
+model Merchant {
+  id                   String                      @id @default(cuid())
+  shopDomain           String                      @unique
+  shopGid              String?
+  shopName             String?
+  email                String?
+  countryCode          String?
+  currencyCode         String?
+  timezone             String?
+  status               String                      @default("active")
+  installedAt          DateTime                    @default(now())
+  uninstalledAt        DateTime?
+  lastSeenAt           DateTime                    @default(now())
+  createdAt            DateTime                    @default(now())
+  updatedAt            DateTime                    @updatedAt
+  plans                MerchantPlan[]
+  events               MerchantEvent[]
+  deletionRequests     MerchantDataDeletionRequest[]
+}
+
+model MerchantPlan {
+  id                    String    @id @default(cuid())
+  merchantId            String
+  shopifySubscriptionGid String?
+  planKey               String
+  planName              String
+  billingModel          String    @default("MANAGED_PRICING")
+  billingInterval       String?
+  status                String    @default("active")
+  isTest                Boolean   @default(false)
+  activatedAt           DateTime?
+  currentPeriodEndAt    DateTime?
+  trialEndsAt           DateTime?
+  canceledAt            DateTime?
+  rawPayloadJson        String    @default("{}")
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  merchant              Merchant  @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@index([merchantId])
+  @@index([merchantId, status])
+}
+
+model MerchantEvent {
+  id          String    @id @default(cuid())
+  merchantId  String
+  type        String
+  severity    String    @default("info")
+  source      String
+  payloadJson String    @default("{}")
+  createdAt   DateTime  @default(now())
+  merchant    Merchant  @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@index([merchantId])
+  @@index([merchantId, type])
+}
+
+model MerchantDataDeletionRequest {
+  id            String    @id @default(cuid())
+  merchantId    String
+  requestedBy   String
+  status        String    @default("pending")
+  scopeJson     String    @default("{}")
+  completedAt   DateTime?
+  failureReason String?
+  auditNotes    String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  merchant      Merchant  @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@index([merchantId])
+  @@index([merchantId, status])
+}
+
 /// Một rule subscribe chung (kiểu Seal): một selling plan group trên Shopify gắn nhiều sản phẩm.
 model SubscriptionRule {
   id                      String   @id @default(cuid())

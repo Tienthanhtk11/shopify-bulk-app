@@ -128,6 +128,19 @@ When you're ready to set up your app in production, you can follow [our deployme
 
 When you reach the step for [setting up environment variables](https://shopify.dev/docs/apps/deployment/web#set-env-vars), you also need to set the variable `NODE_ENV=production`.
 
+### Production Notes For This Repo
+
+This repository uses a self-hosted Docker stack from [thanhpt-stack/docker-compose.yml](../../thanhpt-stack/docker-compose.yml).
+
+Required env vars for merchant billing and deletion jobs:
+
+- `PARTNER_PLAN_FREE_NAMES`, `PARTNER_PLAN_GROWTH_NAMES`, `PARTNER_PLAN_SCALE_NAMES`: comma-separated plan names exactly as they appear in the Shopify Partner Dashboard.
+- `PARTNER_PLAN_FREE_GIDS`, `PARTNER_PLAN_GROWTH_GIDS`, `PARTNER_PLAN_SCALE_GIDS`: optional comma-separated subscription GIDs for exact plan matching.
+- `JOB_RUNNER_SECRET`: shared secret used by the deletion queue route at `/jobs/deletion-requests`.
+- `DELETION_JOB_INTERVAL_SECONDS`: polling interval for the external deletion job runner service in Docker Compose.
+
+The `deletion_job_runner` service calls `POST http://shopify_app:3000/jobs/deletion-requests` on an interval with the `x-job-secret` header so deletion requests are processed without manual intervention.
+
 ### Hosting on Vercel
 
 Using the Vercel Preset is recommended when hosting your Shopify Remix app on Vercel. You'll also want to ensure imports that would normally come from `@remix-run/node` are imported from `@vercel/remix` instead. Learn more about hosting Remix apps on Vercel [here](https://vercel.com/docs/frameworks/remix).
