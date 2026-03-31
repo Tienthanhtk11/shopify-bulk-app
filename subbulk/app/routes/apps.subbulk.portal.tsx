@@ -16,6 +16,12 @@ import {
   isValidSubscriptionContractGid,
   normalizeCustomerGid,
 } from "../services/customer-portal-access.shared";
+import {
+  CUSTOMER_SUBSCRIPTION_ACTION_SUCCESS_MESSAGE,
+  getCustomerSubscriptionMutation,
+  isSupportedCustomerSubscriptionAction,
+  validateCustomerSubscriptionAction,
+} from "../services/customer-subscription-actions.shared";
 import { getOrCreateWidgetSettings } from "../models/widget-settings.server";
 import { authenticate } from "../shopify.server";
 
@@ -431,7 +437,7 @@ function formatDate(value: string | null, withTime = false) {
 }
 
 function formatPaymentStatus(value: string | null) {
-  if (!value) return "No payment status yet";
+  if (!value) return "No billing attempt recorded in Shopify yet";
   return value
     .toLowerCase()
     .split("_")
@@ -547,8 +553,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   const fd = await request.formData();
-  const intent = String(fd.get("intent"));
+  const intent = String(fd.get("intent") || "").trim().toLowerCase();
   const contractId = String(fd.get("contractId") || "");
+
+  if (!isSupportedCustomerSubscriptionAction(intent)) {
+    return json({ error: "This action is not supported." } satisfies ActionData, { status: 400 });
+  }
 
   if (!isValidSubscriptionContractGid(contractId)) {
     return json({ error: "The subscription reference is invalid." } satisfies ActionData);
@@ -564,52 +574,25 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return json({ error: "This subscription does not belong to the current customer." } satisfies ActionData, { status: 403 });
   }
 
+  const currentContract = existingContracts.find((contract) => contract.id === contractId);
+  if (!currentContract) {
+    return json({ error: "This subscription could not be loaded anymore." } satisfies ActionData, { status: 404 });
+  }
+
+  const transitionError = validateCustomerSubscriptionAction(currentContract, intent);
+  if (transitionError) {
+    return json({ error: transitionError } satisfies ActionData, { status: 400 });
+  }
+
   try {
-    if (intent === "pause") {
-      const r = await ctx.admin.graphql(
-        `#graphql
-        mutation P($id: ID!) {
-          subscriptionContractPause(subscriptionContractId: $id) {
-            userErrors { message }
-          }
-        }`,
-        { variables: { id: contractId } },
-      );
-      const j = await r.json();
-      const err = j.data?.subscriptionContractPause?.userErrors?.[0]?.message;
-      if (err) return json({ error: err } satisfies ActionData);
-      return json({ success: "Your subscription has been paused." } satisfies ActionData);
-    } else if (intent === "resume") {
-      const r = await ctx.admin.graphql(
-        `#graphql
-        mutation R($id: ID!) {
-          subscriptionContractActivate(subscriptionContractId: $id) {
-            userErrors { message }
-          }
-        }`,
-        { variables: { id: contractId } },
-      );
-      const j = await r.json();
-      const err = j.data?.subscriptionContractActivate?.userErrors?.[0]?.message;
-      if (err) return json({ error: err } satisfies ActionData);
-      return json({ success: "Your subscription has been resumed." } satisfies ActionData);
-    } else if (intent === "cancel") {
-      const r = await ctx.admin.graphql(
-        `#graphql
-        mutation C($id: ID!) {
-          subscriptionContractCancel(subscriptionContractId: $id) {
-            userErrors { message }
-          }
-        }`,
-        { variables: { id: contractId } },
-      );
-      const j = await r.json();
-      const err = j.data?.subscriptionContractCancel?.userErrors?.[0]?.message;
-      if (err) return json({ error: err } satisfies ActionData);
-      return json({ success: "Your subscription has been cancelled." } satisfies ActionData);
-    } else {
-      return json({ error: "This action is not supported." } satisfies ActionData);
-    }
+    const mutation = getCustomerSubscriptionMutation(intent);
+    const response = await ctx.admin.graphql(mutation.query, {
+      variables: { id: contractId },
+    });
+    const payload = await response.json();
+    const err = payload.data?.[mutation.payloadPath]?.userErrors?.[0]?.message;
+    if (err) return json({ error: err } satisfies ActionData);
+    return json({ success: CUSTOMER_SUBSCRIPTION_ACTION_SUCCESS_MESSAGE[intent] } satisfies ActionData);
   } catch (e) {
     return json({
       error:
@@ -899,7 +882,7 @@ export default function SubbulkCustomerPortal() {
             </p>
             <div style={{ ...styles.contractMeta, marginTop: 18, marginBottom: 0 }} className="subbulk-portal__pills">
               <span style={styles.metaPill} className="subbulk-portal__pill">Saved payment methods stay managed by Shopify</span>
-              <span style={styles.metaPill} className="subbulk-portal__pill">Last payment status is shown per subscription</span>
+              <span style={styles.metaPill} className="subbulk-portal__pill">Billing status appears after Shopify records a charge attempt</span>
             </div>
             <div style={styles.statsGrid} className="subbulk-portal__stats">
               <div style={styles.statCard} className="subbulk-portal__stat">
@@ -1023,7 +1006,7 @@ export default function SubbulkCustomerPortal() {
                         Quantity per order: {contract.quantity}
                       </span>
                       <span style={styles.metaPill} className="subbulk-portal__pill">
-                        Payment method: {contract.paymentMethodLabel || "Not visible yet"}
+                        Payment method: {contract.paymentMethodLabel || "Shopify has not exposed payment method details yet"}
                       </span>
                       <span style={styles.metaPill} className="subbulk-portal__pill">
                         Last payment: {formatPaymentStatus(contract.lastPaymentStatus)}

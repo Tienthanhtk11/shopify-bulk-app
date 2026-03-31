@@ -36,7 +36,7 @@ function formatDate(value: string | null) {
 }
 
 function formatPaymentStatus(value: string | null) {
-  if (!value) return "No payment status yet";
+  if (!value) return "No billing attempt recorded in Shopify yet";
   return value
     .toLowerCase()
     .split("_")
@@ -179,6 +179,9 @@ export default function SubscriptionsPage() {
                 <Text as="p" variant="bodyMd" tone="subdued">
                   Search by customer, email, contract id, or subscribed product.
                 </Text>
+                <Text as="p" variant="bodySm" tone="subdued">
+                  Payment method badges come directly from Shopify. The payment status line stays empty until Shopify records a billing attempt for that contract.
+                </Text>
               </BlockStack>
               <InlineStack gap="200">
                 <Button disabled>Add subscription</Button>
@@ -287,7 +290,7 @@ export default function SubscriptionsPage() {
                         </Text>
                         <InlineStack gap="200" blockAlign="center" wrap>
                           <Badge tone={paymentMethodTone(row.paymentMethodStatus)}>
-                            {row.paymentMethodLabel || "Payment method not visible yet"}
+                            {row.paymentMethodLabel || "Payment method details not exposed by Shopify yet"}
                           </Badge>
                         </InlineStack>
                       </BlockStack>

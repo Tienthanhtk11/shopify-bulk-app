@@ -79,10 +79,10 @@ function resolvePaymentMethodLabel(
   paymentMethodStatus: PaymentMethodStatus,
 ): string | null {
   if (paymentMethodStatus === "ON_FILE") {
-    return "Saved payment method on file";
+    return "Saved payment method on file with Shopify";
   }
   if (paymentMethodStatus === "REVOKED") {
-    return "Saved payment method needs attention";
+    return "Saved payment method needs attention in Shopify";
   }
   return null;
 }

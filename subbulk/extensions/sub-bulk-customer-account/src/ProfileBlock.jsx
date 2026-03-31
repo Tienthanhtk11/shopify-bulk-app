@@ -37,7 +37,7 @@ function formatStatus(status) {
 }
 
 function formatPaymentStatus(status) {
-  if (!status) return 'No payment status yet';
+  if (!status) return 'No billing attempt recorded in Shopify yet';
 
   return status
     .toLowerCase()
@@ -314,7 +314,7 @@ function Extension() {
                   <s-text>Next billing: {formatDate(contract.nextBillingDate)}</s-text>
                   <s-text>Started: {formatDate(contract.createdAt)}</s-text>
                   <s-text>
-                    Payment method: {contract.paymentMethodLabel || 'Not visible yet'}
+                    Payment method: {contract.paymentMethodLabel || 'Shopify has not exposed payment method details yet'}
                   </s-text>
                   <s-text>
                     Last payment: {formatPaymentStatus(contract.lastPaymentStatus)}

@@ -6,15 +6,14 @@ import {
   isValidSubscriptionContractGid,
   normalizeCustomerGid,
 } from "../services/customer-portal-access.shared";
+import {
+  CUSTOMER_SUBSCRIPTION_ACTION_SUCCESS_MESSAGE,
+  getCustomerSubscriptionMutation,
+  isSupportedCustomerSubscriptionAction,
+  type CustomerSubscriptionActionIntent,
+  validateCustomerSubscriptionAction,
+} from "../services/customer-subscription-actions.shared";
 import { authenticate, unauthenticated } from "../shopify.server";
-
-type CustomerAccountIntent = "pause" | "resume" | "cancel";
-
-const ACTION_SUCCESS_MESSAGE: Record<CustomerAccountIntent, string> = {
-  pause: "Your subscription has been paused.",
-  resume: "Your subscription has been resumed.",
-  cancel: "Your subscription has been cancelled.",
-};
 
 function extractMyshopifyDomain(value: string | null | undefined) {
   if (!value) return null;
@@ -47,54 +46,17 @@ function buildPortalUrl(shop: string | null) {
   return `https://${shop}/apps/subbulk/portal`;
 }
 
-function isSupportedIntent(value: string): value is CustomerAccountIntent {
-  return value === "pause" || value === "resume" || value === "cancel";
-}
-
 async function mutateCustomerSubscriptionContract(
   admin: Awaited<ReturnType<typeof unauthenticated.admin>>["admin"],
-  intent: CustomerAccountIntent,
+  intent: CustomerSubscriptionActionIntent,
   contractId: string,
 ) {
-  if (intent === "pause") {
-    const response = await admin.graphql(
-      `#graphql
-      mutation PauseCustomerSubscription($id: ID!) {
-        subscriptionContractPause(subscriptionContractId: $id) {
-          userErrors { message }
-        }
-      }`,
-      { variables: { id: contractId } },
-    );
-    const payload = await response.json();
-    return payload.data?.subscriptionContractPause?.userErrors?.[0]?.message ?? null;
-  }
-
-  if (intent === "resume") {
-    const response = await admin.graphql(
-      `#graphql
-      mutation ResumeCustomerSubscription($id: ID!) {
-        subscriptionContractActivate(subscriptionContractId: $id) {
-          userErrors { message }
-        }
-      }`,
-      { variables: { id: contractId } },
-    );
-    const payload = await response.json();
-    return payload.data?.subscriptionContractActivate?.userErrors?.[0]?.message ?? null;
-  }
-
-  const response = await admin.graphql(
-    `#graphql
-    mutation CancelCustomerSubscription($id: ID!) {
-      subscriptionContractCancel(subscriptionContractId: $id) {
-        userErrors { message }
-      }
-    }`,
-    { variables: { id: contractId } },
-  );
+  const mutation = getCustomerSubscriptionMutation(intent);
+  const response = await admin.graphql(mutation.query, {
+    variables: { id: contractId },
+  });
   const payload = await response.json();
-  return payload.data?.subscriptionContractCancel?.userErrors?.[0]?.message ?? null;
+  return payload.data?.[mutation.payloadPath]?.userErrors?.[0]?.message ?? null;
 }
 
 function buildCorsErrorResponse(status: number, error: string) {
@@ -177,7 +139,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     let success = "";
 
     if (intent) {
-      if (!isSupportedIntent(intent)) {
+      if (!isSupportedCustomerSubscriptionAction(intent)) {
         return cors(
           json(
             {
@@ -214,6 +176,32 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         );
       }
 
+      const currentContract = existingContracts.find((contract) => contract.id === contractId);
+      if (!currentContract) {
+        return cors(
+          json(
+            {
+              error: "This subscription could not be loaded anymore.",
+              contracts: existingContracts,
+            },
+            { status: 404 },
+          ),
+        );
+      }
+
+      const transitionError = validateCustomerSubscriptionAction(currentContract, intent);
+      if (transitionError) {
+        return cors(
+          json(
+            {
+              error: transitionError,
+              contracts: existingContracts,
+            },
+            { status: 400 },
+          ),
+        );
+      }
+
       const mutationError = await mutateCustomerSubscriptionContract(admin, intent, contractId);
       if (mutationError) {
         return cors(
@@ -227,7 +215,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         );
       }
 
-      success = ACTION_SUCCESS_MESSAGE[intent];
+      success = CUSTOMER_SUBSCRIPTION_ACTION_SUCCESS_MESSAGE[intent];
     }
 
     const contracts = await listCustomerSubscriptionContracts(admin, customerId, 20);
@@ -238,7 +226,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         success,
         portalUrl: buildPortalUrl(shop),
         paymentMethodHelp:
-          "Payment methods stay managed securely by Shopify. If a saved method needs attention, update it in the store account or contact the merchant.",
+          "Payment methods stay managed securely by Shopify. Billing status appears after Shopify records a charge attempt for the subscription.",
       }),
     );
   } catch (error) {
