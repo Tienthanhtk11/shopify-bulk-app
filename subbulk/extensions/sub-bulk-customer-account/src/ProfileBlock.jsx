@@ -1,6 +1,7 @@
 import '@shopify/ui-extensions/preact';
 import {
   useAuthenticatedAccountCustomer,
+  useApi,
   useSessionToken,
 } from '@shopify/ui-extensions/customer-account/preact';
 import {render} from 'preact';
@@ -65,17 +66,23 @@ export default async () => {
 
 function Extension() {
   const customer = useAuthenticatedAccountCustomer();
+  const api = useApi();
   const sessionToken = useSessionToken();
   const [state, setState] = useState({
     loading: true,
     error: '',
-    success: '',
     contracts: [],
     busyContractId: '',
     busyIntent: '',
     paymentMethodHelp: '',
   });
   const stats = buildStats(state.contracts);
+
+  function showToast(message) {
+    if (!message) return;
+
+    api.toast.show(message).catch(() => {});
+  }
 
   async function requestContracts(intent = '', contractId = '') {
     const token = await sessionToken.get();
@@ -106,7 +113,6 @@ function Extension() {
       setState({
         loading: false,
         error: 'Customer details are not available yet.',
-        success: '',
         contracts: [],
         busyContractId: '',
         busyIntent: '',
@@ -119,7 +125,6 @@ function Extension() {
       ...current,
       loading: true,
       error: '',
-      success: '',
     }));
 
     try {
@@ -128,7 +133,6 @@ function Extension() {
       setState({
         loading: false,
         error: '',
-        success: typeof data.success === 'string' ? data.success : '',
         contracts: Array.isArray(data.contracts) ? data.contracts : [],
         busyContractId: '',
         busyIntent: '',
@@ -142,7 +146,6 @@ function Extension() {
           error instanceof Error
             ? error.message
             : 'SubBulk could not load your subscriptions.',
-        success: '',
         contracts: [],
         busyContractId: '',
         busyIntent: '',
@@ -157,7 +160,6 @@ function Extension() {
     setState((current) => ({
       ...current,
       error: '',
-      success: '',
       busyContractId: contractId,
       busyIntent: intent,
     }));
@@ -168,27 +170,30 @@ function Extension() {
       setState({
         loading: false,
         error: '',
-        success:
-          typeof data.success === 'string' && data.success
-            ? data.success
-            : 'Your subscription has been updated.',
         contracts: Array.isArray(data.contracts) ? data.contracts : [],
         busyContractId: '',
         busyIntent: '',
         paymentMethodHelp:
           typeof data.paymentMethodHelp === 'string' ? data.paymentMethodHelp : '',
       });
+
+      showToast(
+        typeof data.success === 'string' && data.success
+          ? data.success
+          : 'Subscription updated',
+      );
     } catch (error) {
       setState((current) => ({
         ...current,
-        error:
-          error instanceof Error
-            ? error.message
-            : 'SubBulk could not update your subscription.',
-        success: '',
         busyContractId: '',
         busyIntent: '',
       }));
+
+      showToast(
+        error instanceof Error
+          ? error.message
+          : 'SubBulk could not update your subscription.',
+      );
     }
   }
 
@@ -233,12 +238,6 @@ function Extension() {
           <s-heading>{String(stats.cancelled)}</s-heading>
         </s-stack>
       </s-grid>
-
-      {!state.loading && state.success ? (
-        <s-banner tone="success" heading="Subscription updated">
-          <s-text>{state.success}</s-text>
-        </s-banner>
-      ) : null}
 
       {!state.loading && state.error ? (
         <s-banner tone="critical" heading="Action unavailable">

@@ -9,7 +9,7 @@ import {
   useLoaderData,
   useNavigation,
 } from "@remix-run/react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { listCustomerSubscriptionContracts } from "../models/subscription-contracts.server";
 import {
   customerOwnsContract,
@@ -56,6 +56,11 @@ type LoaderData = {
 type ActionData = {
   error?: string;
   success?: string;
+};
+
+type PortalToast = {
+  tone: "success" | "error";
+  message: string;
 };
 
 const DEFAULT_THEME = {
@@ -318,11 +323,22 @@ function portalStyles(theme: LoaderData["theme"]) {
       color: #8f1d1d;
     }
 
+    .subbulk-portal__toast-stack {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      display: grid;
+      gap: 12px;
+      z-index: 50;
+      width: min(420px, calc(100vw - 28px));
+    }
+
     .subbulk-portal__notice {
       padding: 14px 16px;
       border-radius: 18px;
-      margin-bottom: 16px;
       border: 1px solid;
+      box-shadow: 0 18px 40px rgba(20, 33, 61, 0.16);
+      backdrop-filter: blur(4px);
     }
 
     .subbulk-portal__notice--error {
@@ -402,6 +418,14 @@ function portalStyles(theme: LoaderData["theme"]) {
       .subbulk-portal__actions {
         flex-direction: column;
         align-items: stretch;
+      }
+
+      .subbulk-portal__toast-stack {
+        top: auto;
+        right: 14px;
+        left: 14px;
+        bottom: 14px;
+        width: auto;
       }
 
       .subbulk-portal__status,
@@ -608,6 +632,7 @@ export default function SubbulkCustomerPortal() {
   const actionData = useActionData<typeof action>();
   const nav = useNavigation();
   const [query, setQuery] = useState("");
+  const [toast, setToast] = useState<PortalToast | null>(null);
   const busy = nav.state !== "idle";
   const pendingIntent = nav.formData?.get("intent");
   const pendingContractId = nav.formData?.get("contractId");
@@ -627,6 +652,25 @@ export default function SubbulkCustomerPortal() {
   const returnUrl = encodeURIComponent(data.portalPath);
   const loginHref = `/account/login?return_url=${returnUrl}`;
   const themeCss = useMemo(() => portalStyles(data.theme), [data.theme]);
+
+  useEffect(() => {
+    if (!actionData) return;
+
+    if (actionData.success) {
+      setToast({ tone: "success", message: actionData.success });
+      return;
+    }
+
+    if (actionData.error) {
+      setToast({ tone: "error", message: actionData.error });
+    }
+  }, [actionData]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timeout = window.setTimeout(() => setToast(null), 3500);
+    return () => window.clearTimeout(timeout);
+  }, [toast]);
 
   const styles = {
     wrap: {
@@ -871,6 +915,16 @@ export default function SubbulkCustomerPortal() {
   return (
     <div style={styles.shell} className="subbulk-portal">
       <style>{themeCss}</style>
+      {toast ? (
+        <div className="subbulk-portal__toast-stack" aria-live="polite">
+          <div
+            className={`subbulk-portal__notice subbulk-portal__notice--${toast.tone}`}
+            role="status"
+          >
+            {toast.message}
+          </div>
+        </div>
+      ) : null}
       <div style={styles.wrap} className="subbulk-portal__wrap">
         <div style={styles.hero} className="subbulk-portal__hero">
           <section style={styles.heroCard} className="subbulk-portal__card">
@@ -932,16 +986,6 @@ export default function SubbulkCustomerPortal() {
               className="subbulk-portal__search"
             />
           </div>
-
-          {actionData && actionData.success ? (
-            <div className="subbulk-portal__notice subbulk-portal__notice--success">
-              {actionData.success}
-            </div>
-          ) : null}
-
-          {actionData && "error" in actionData && actionData.error ? (
-            <div style={styles.notice} className="subbulk-portal__notice subbulk-portal__notice--error">{actionData.error}</div>
-          ) : null}
 
           {filteredContracts.length === 0 ? (
             <div style={styles.empty} className="subbulk-portal__empty">
