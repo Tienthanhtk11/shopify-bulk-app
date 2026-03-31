@@ -2,9 +2,28 @@ import { createRequire } from "node:module";
 import type { PrismaClient as PrismaClientType } from "../generated/prisma/client";
 
 const require = createRequire(import.meta.url);
-const { PrismaClient } = require("../../generated/prisma/client") as {
-  PrismaClient: new () => PrismaClientType;
-};
+
+function loadPrismaClient() {
+  for (const candidate of ["../generated/prisma/client", "../../generated/prisma/client"]) {
+    try {
+      return require(candidate) as {
+        PrismaClient: new () => PrismaClientType;
+      };
+    } catch (error) {
+      if (
+        !(error instanceof Error) ||
+        !("code" in error) ||
+        error.code !== "MODULE_NOT_FOUND"
+      ) {
+        throw error;
+      }
+    }
+  }
+
+  throw new Error("Unable to resolve generated Prisma client from source or build runtime.");
+}
+
+const { PrismaClient } = loadPrismaClient();
 
 declare global {
   var prismaGlobal: PrismaClientType;

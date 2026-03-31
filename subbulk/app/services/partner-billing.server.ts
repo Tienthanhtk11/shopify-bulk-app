@@ -19,6 +19,18 @@ function normalizeToken(value: string | null | undefined) {
     .replace(/^_|_$/g, "");
 }
 
+function expandGidCandidates(value: string | null | undefined) {
+  const raw = String(value || "").trim();
+  if (!raw) return [] as string[];
+
+  const normalized = normalizeToken(raw);
+  const lastPathSegment = raw.split("/").filter(Boolean).at(-1) || "";
+  const normalizedLastSegment = normalizeToken(lastPathSegment);
+  const trailingDigits = raw.match(/(\d+)$/)?.[1] || "";
+
+  return Array.from(new Set([normalized, normalizedLastSegment, trailingDigits].filter(Boolean)));
+}
+
 function parseCsv(value: string | undefined, defaults: string[] = []) {
   const source = value && value.trim().length > 0 ? value.split(",") : defaults;
 
@@ -27,22 +39,30 @@ function parseCsv(value: string | undefined, defaults: string[] = []) {
   );
 }
 
+function parseGidCsv(value: string | undefined) {
+  const source = value && value.trim().length > 0 ? value.split(",") : [];
+
+  return Array.from(
+    new Set(source.flatMap((item) => expandGidCandidates(item)).filter(Boolean)),
+  );
+}
+
 function getPartnerPlanConfigs(): PartnerPlanConfig[] {
   return [
     {
       planKey: "free",
       aliases: parseCsv(process.env.PARTNER_PLAN_FREE_NAMES, ["Free"]),
-      gids: parseCsv(process.env.PARTNER_PLAN_FREE_GIDS),
+      gids: parseGidCsv(process.env.PARTNER_PLAN_FREE_GIDS),
     },
     {
       planKey: "growth",
       aliases: parseCsv(process.env.PARTNER_PLAN_GROWTH_NAMES, ["Growth", "Premium"]),
-      gids: parseCsv(process.env.PARTNER_PLAN_GROWTH_GIDS),
+      gids: parseGidCsv(process.env.PARTNER_PLAN_GROWTH_GIDS),
     },
     {
       planKey: "scale",
       aliases: parseCsv(process.env.PARTNER_PLAN_SCALE_NAMES, ["Scale", "Ultra"]),
-      gids: parseCsv(process.env.PARTNER_PLAN_SCALE_GIDS),
+      gids: parseGidCsv(process.env.PARTNER_PLAN_SCALE_GIDS),
     },
   ];
 }
@@ -50,34 +70,37 @@ function getPartnerPlanConfigs(): PartnerPlanConfig[] {
 export function resolvePartnerDashboardPlan(input: {
   planName?: string | null;
   shopifySubscriptionGid?: string | null;
+  lineItemPlanNames?: Array<string | null | undefined>;
 }): ResolvedPartnerPlan {
-  const normalizedName = normalizeToken(input.planName);
-  const normalizedGid = normalizeToken(input.shopifySubscriptionGid);
+  const nameSignals = Array.from(
+    new Set([input.planName, ...(input.lineItemPlanNames || [])].map((value) => normalizeToken(value)).filter(Boolean)),
+  );
+  const gidSignals = expandGidCandidates(input.shopifySubscriptionGid);
   const configs = getPartnerPlanConfigs();
 
-  if (normalizedGid) {
-    const gidMatch = configs.find((config) => config.gids.includes(normalizedGid));
+  if (gidSignals.length > 0) {
+    const gidMatch = configs.find((config) => gidSignals.some((gid) => config.gids.includes(gid)));
     if (gidMatch) {
       return { planKey: gidMatch.planKey, matchedBy: "gid" };
     }
   }
 
-  if (normalizedName) {
-    const nameMatch = configs.find((config) => config.aliases.includes(normalizedName));
+  if (nameSignals.length > 0) {
+    const nameMatch = configs.find((config) => nameSignals.some((name) => config.aliases.includes(name)));
     if (nameMatch) {
       return { planKey: nameMatch.planKey, matchedBy: "name" };
     }
   }
 
-  if (normalizedName.includes("scale") || normalizedName.includes("ultra")) {
+  if (nameSignals.some((name) => name.includes("scale") || name.includes("ultra"))) {
     return { planKey: "scale", matchedBy: "heuristic" };
   }
 
-  if (normalizedName.includes("growth") || normalizedName.includes("premium")) {
+  if (nameSignals.some((name) => name.includes("growth") || name.includes("premium"))) {
     return { planKey: "growth", matchedBy: "heuristic" };
   }
 
-  if (normalizedName.includes("free")) {
+  if (nameSignals.some((name) => name.includes("free"))) {
     return { planKey: "free", matchedBy: "heuristic" };
   }
 

@@ -68,6 +68,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     offers.map((o: SubscriptionOffer) => o.productGid).filter(Boolean),
   );
   const url = new URL(request.url);
+  const entrySource = url.searchParams.get("source")?.trim() ?? "";
   const bulkEditGid = url.searchParams.get("bulk")?.trim() ?? "";
   let bulkPricingJson = "";
   let bulkEditValid = false;
@@ -87,6 +88,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   return {
     shop: session.shop,
     products,
+    entrySource,
     bulkEditGid: bulkEditValid ? bulkEditGid : "",
     bulkPricingJson,
     productGidsWithSubBulkOffer: Array.from(productGidsWithSubBulkOffer),
@@ -218,6 +220,7 @@ export default function WidgetProductsPage() {
   const {
     shop,
     products,
+    entrySource,
     bulkEditGid,
     bulkPricingJson,
     productGidsWithSubBulkOffer,
@@ -314,6 +317,19 @@ export default function WidgetProductsPage() {
         "message" in actionData &&
         typeof actionData.message === "string" ? (
           <Banner tone="success" title={actionData.message} />
+        ) : null}
+
+        {entrySource === "discounts" ? (
+          <Banner tone="success" title="Discounts admin opened this screen">
+            <BlockStack gap="200">
+              <Text as="p" variant="bodyMd">
+                Use this page to configure the products that participate in SubBulk quantity discounts and to maintain the bulk pricing JSON that the storefront widget reads.
+              </Text>
+              <Text as="p" variant="bodySm" tone="subdued">
+                Recommended flow: add products here, save tier pricing for each product, then validate the discount behavior in cart and checkout.
+              </Text>
+            </BlockStack>
+          </Banner>
         ) : null}
 
         <Banner tone="info" title="Vị trí trong quy trình">

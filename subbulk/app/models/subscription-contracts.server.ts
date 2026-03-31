@@ -8,6 +8,9 @@ export type SubscriptionContractRow = {
   status: SubscriptionContractStatus;
   createdAt: string;
   nextBillingDate: string | null;
+  lastPaymentStatus: string | null;
+  paymentMethodLabel: string | null;
+  paymentMethodStatus: "ON_FILE" | "REVOKED" | "UNAVAILABLE";
   customerName: string;
   customerEmail: string;
   lineTitle: string;
@@ -20,15 +23,27 @@ export type CustomerSubscriptionContractRow = {
   status: SubscriptionContractStatus;
   createdAt: string;
   nextBillingDate: string | null;
+  lastPaymentStatus: string | null;
+  paymentMethodLabel: string | null;
+  paymentMethodStatus: "ON_FILE" | "REVOKED" | "UNAVAILABLE";
   lineTitle: string;
   quantity: number;
 };
+
+type PaymentMethodStatus = "ON_FILE" | "REVOKED" | "UNAVAILABLE";
+
+type ShopifyCustomerPaymentMethodNode = {
+  id?: string;
+  revokedAt?: string | null;
+} | null;
 
 type ShopifyContractNode = {
   id?: string;
   status?: SubscriptionContractStatus;
   createdAt?: string;
   nextBillingDate?: string | null;
+  lastPaymentStatus?: string | null;
+  customerPaymentMethod?: ShopifyCustomerPaymentMethodNode;
   customer?: {
     displayName?: string | null;
     email?: string | null;
@@ -52,6 +67,26 @@ function parseContractShortId(id: string) {
   return id.split("/").pop() ?? id;
 }
 
+function resolvePaymentMethodStatus(
+  paymentMethod: ShopifyCustomerPaymentMethodNode,
+): PaymentMethodStatus {
+  if (!paymentMethod?.id) return "UNAVAILABLE";
+  if (paymentMethod.revokedAt) return "REVOKED";
+  return "ON_FILE";
+}
+
+function resolvePaymentMethodLabel(
+  paymentMethodStatus: PaymentMethodStatus,
+): string | null {
+  if (paymentMethodStatus === "ON_FILE") {
+    return "Saved payment method on file";
+  }
+  if (paymentMethodStatus === "REVOKED") {
+    return "Saved payment method needs attention";
+  }
+  return null;
+}
+
 function mapContractNode(node: ShopifyContractNode): SubscriptionContractRow | null {
   if (!node.id || !node.status || !SUPPORTED_STATUSES.includes(node.status)) {
     return null;
@@ -59,6 +94,7 @@ function mapContractNode(node: ShopifyContractNode): SubscriptionContractRow | n
 
   const firstLine = node.lines?.nodes?.[0];
   const pieces = [firstLine?.title, firstLine?.variantTitle].filter(Boolean);
+  const paymentMethodStatus = resolvePaymentMethodStatus(node.customerPaymentMethod);
 
   return {
     id: node.id,
@@ -66,6 +102,9 @@ function mapContractNode(node: ShopifyContractNode): SubscriptionContractRow | n
     status: node.status,
     createdAt: node.createdAt ?? new Date(0).toISOString(),
     nextBillingDate: node.nextBillingDate ?? null,
+    lastPaymentStatus: node.lastPaymentStatus ?? null,
+    paymentMethodLabel: resolvePaymentMethodLabel(paymentMethodStatus),
+    paymentMethodStatus,
     customerName: node.customer?.displayName?.trim() || "Unknown customer",
     customerEmail: node.customer?.email?.trim() || "No email",
     lineTitle: pieces.join(" / ") || "Subscription",
@@ -85,6 +124,7 @@ function mapCustomerContractNode(
 
   const firstLine = node.lines?.nodes?.[0];
   const pieces = [firstLine?.title, firstLine?.variantTitle].filter(Boolean);
+  const paymentMethodStatus = resolvePaymentMethodStatus(node.customerPaymentMethod);
 
   return {
     id: node.id,
@@ -92,6 +132,9 @@ function mapCustomerContractNode(
     status: node.status,
     createdAt: node.createdAt ?? new Date(0).toISOString(),
     nextBillingDate: node.nextBillingDate ?? null,
+    lastPaymentStatus: node.lastPaymentStatus ?? null,
+    paymentMethodLabel: resolvePaymentMethodLabel(paymentMethodStatus),
+    paymentMethodStatus,
     lineTitle: pieces.join(" / ") || "Subscription",
     quantity:
       typeof firstLine?.quantity === "number" && Number.isFinite(firstLine.quantity)
@@ -100,43 +143,127 @@ function mapCustomerContractNode(
   };
 }
 
+const ADMIN_CONTRACT_FIELDS = `
+  id
+  status
+  createdAt
+  nextBillingDate
+  lastPaymentStatus
+  customer {
+    displayName
+    email
+  }
+  customerPaymentMethod(showRevoked: true) {
+    id
+    revokedAt
+  }
+  lines(first: 3) {
+    nodes {
+      title
+      variantTitle
+      quantity
+    }
+  }
+`;
+
+const ADMIN_CONTRACT_FIELDS_FALLBACK = `
+  id
+  status
+  createdAt
+  nextBillingDate
+  lastPaymentStatus
+  customer {
+    displayName
+    email
+  }
+  lines(first: 3) {
+    nodes {
+      title
+      variantTitle
+      quantity
+    }
+  }
+`;
+
+const CUSTOMER_CONTRACT_FIELDS = `
+  id
+  status
+  createdAt
+  nextBillingDate
+  lastPaymentStatus
+  customerPaymentMethod(showRevoked: true) {
+    id
+    revokedAt
+  }
+  lines(first: 1) {
+    nodes {
+      title
+      variantTitle
+      quantity
+    }
+  }
+`;
+
+const CUSTOMER_CONTRACT_FIELDS_FALLBACK = `
+  id
+  status
+  createdAt
+  nextBillingDate
+  lastPaymentStatus
+  lines(first: 1) {
+    nodes {
+      title
+      variantTitle
+      quantity
+    }
+  }
+`;
+
+async function queryContractsWithOptionalPaymentMethod(
+  admin: AdminApiContext,
+  queryWithPaymentMethod: string,
+  queryFallback: string,
+  variables: Record<string, unknown>,
+) {
+  const firstResponse = await admin.graphql(queryWithPaymentMethod, { variables });
+  const firstPayload = await firstResponse.json();
+
+  if (!Array.isArray(firstPayload.errors) || firstPayload.errors.length === 0) {
+    return firstPayload;
+  }
+
+  const fallbackResponse = await admin.graphql(queryFallback, { variables });
+  return fallbackResponse.json();
+}
+
 async function fetchContractsForStatus(
   admin: AdminApiContext,
   status: SubscriptionContractStatus,
   first = 100,
 ) {
-  const res = await admin.graphql(
+  const json = await queryContractsWithOptionalPaymentMethod(
+    admin,
     `#graphql
     query SubBulkAdminContracts($first: Int!, $query: String!) {
       subscriptionContracts(first: $first, query: $query) {
         nodes {
-          id
-          status
-          createdAt
-          nextBillingDate
-          customer {
-            displayName
-            email
-          }
-          lines(first: 3) {
-            nodes {
-              title
-              variantTitle
-              quantity
-            }
-          }
+${ADMIN_CONTRACT_FIELDS}
+        }
+      }
+    }`,
+    `#graphql
+    query SubBulkAdminContractsFallback($first: Int!, $query: String!) {
+      subscriptionContracts(first: $first, query: $query) {
+        nodes {
+${ADMIN_CONTRACT_FIELDS_FALLBACK}
         }
       }
     }`,
     {
-      variables: {
-        first,
-        query: `status:${status}`,
-      },
+      first,
+      query: `status:${status}`,
     },
   );
-
-  const json = await res.json();
   const nodes = (json.data?.subscriptionContracts?.nodes ?? []) as ShopifyContractNode[];
 
   return nodes
@@ -175,36 +302,33 @@ export async function listCustomerSubscriptionContracts(
   customerId: string,
   first = 20,
 ) {
-  const res = await admin.graphql(
+  const json = await queryContractsWithOptionalPaymentMethod(
+    admin,
     `#graphql
     query SubBulkCustomerContracts($id: ID!, $first: Int!) {
       customer(id: $id) {
         subscriptionContracts(first: $first) {
           nodes {
-            id
-            status
-            createdAt
-            nextBillingDate
-            lines(first: 1) {
-              nodes {
-                title
-                variantTitle
-                quantity
-              }
-            }
+${CUSTOMER_CONTRACT_FIELDS}
+          }
+        }
+      }
+    }`,
+    `#graphql
+    query SubBulkCustomerContractsFallback($id: ID!, $first: Int!) {
+      customer(id: $id) {
+        subscriptionContracts(first: $first) {
+          nodes {
+${CUSTOMER_CONTRACT_FIELDS_FALLBACK}
           }
         }
       }
     }`,
     {
-      variables: {
-        id: customerId,
-        first,
-      },
+      id: customerId,
+      first,
     },
   );
-
-  const json = await res.json();
   const nodes = (json.data?.customer?.subscriptionContracts?.nodes ?? []) as ShopifyContractNode[];
 
   return nodes

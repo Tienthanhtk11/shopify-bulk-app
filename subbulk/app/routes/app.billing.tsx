@@ -16,7 +16,7 @@ import { getLatestMerchantPlan, upsertMerchantFromSession } from "../models/merc
 import { listAdminPlanDefinitions } from "../services/admin-plan-catalog.server";
 import { FEATURE_LABELS } from "../services/entitlements.shared";
 import { resolveEntitlements } from "../services/entitlements.server";
-import { getManagedPricingPageUrl } from "../services/managed-pricing.server";
+import { getManagedPricingPageState } from "../services/managed-pricing.server";
 import { authenticate } from "../shopify.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -26,20 +26,21 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const entitlements = resolveEntitlements(latestPlan);
   const url = new URL(request.url);
   const planCatalog = await listAdminPlanDefinitions();
+  const managedPricing = getManagedPricingPageState(session.shop);
 
   return {
     shop: session.shop,
     latestPlan,
     entitlements,
     planCatalog,
-    managedPricingUrl: getManagedPricingPageUrl(session.shop),
+    managedPricing,
     requiredFeature: url.searchParams.get("required") || null,
     writeBlocked: url.searchParams.get("writeBlocked") || null,
   };
 };
 
 export default function BillingPage() {
-  const { shop, latestPlan, entitlements, planCatalog, managedPricingUrl, requiredFeature, writeBlocked } = useLoaderData<typeof loader>();
+  const { shop, latestPlan, entitlements, planCatalog, managedPricing, requiredFeature, writeBlocked } = useLoaderData<typeof loader>();
   const featureEntries = Object.entries(entitlements.features);
   const showResolutionBanner = entitlements.planKey !== "free" && !entitlements.hasActivePlanAccess;
   const visiblePlans = planCatalog.filter((plan) => entitlements.planKey === plan.key || (plan.isActive && plan.isPublic));
@@ -87,6 +88,19 @@ export default function BillingPage() {
           </Card>
         ) : null}
 
+        {managedPricing.configured && !managedPricing.ready ? (
+          <Card>
+            <BlockStack gap="100">
+              <Text as="h2" variant="headingMd">
+                Shopify-hosted pricing is not published yet
+              </Text>
+              <Text as="p" variant="bodyMd">
+                The app handle is configured, but SubBulk intentionally hides the external pricing page until Partner Dashboard pricing content is published. This prevents merchants and reviewers from landing on a Shopify-hosted 404.
+              </Text>
+            </BlockStack>
+          </Card>
+        ) : null}
+
         <InlineGrid columns={{ xs: 1, md: 2 }} gap="400">
           <Card>
             <BlockStack gap="100">
@@ -113,9 +127,11 @@ export default function BillingPage() {
                 {latestPlan?.status || "no_plan_recorded"}
               </Text>
               <Text as="p" variant="bodySm" tone="subdued">
-                {managedPricingUrl
+                {managedPricing.ready
                   ? "You can open the Shopify-hosted pricing page below to change or upgrade the merchant package."
-                  : "Set SHOPIFY_MANAGED_PRICING_APP_HANDLE to expose direct plan-change links in Shopify admin."}
+                  : managedPricing.configured
+                    ? "Shopify-hosted pricing remains hidden until Partner Dashboard managed pricing is fully published."
+                    : "Set SHOPIFY_MANAGED_PRICING_APP_HANDLE to expose direct plan-change links in Shopify admin."}
               </Text>
             </BlockStack>
           </Card>
@@ -132,12 +148,20 @@ export default function BillingPage() {
                   Merchants can review their current package here and move to a different plan through Shopify managed pricing.
                 </Text>
               </BlockStack>
-              {managedPricingUrl ? (
-                <a href={managedPricingUrl} target="_top" rel="noreferrer" style={{ textDecoration: "none" }}>
+              {managedPricing.ready && managedPricing.url ? (
+                <a href={managedPricing.url} target="_top" rel="noreferrer" style={{ textDecoration: "none" }}>
                   <Button variant="primary">Open Shopify pricing page</Button>
                 </a>
               ) : null}
             </InlineStack>
+
+            {!managedPricing.ready ? (
+              <Text as="p" variant="bodySm" tone="subdued">
+                {managedPricing.configured
+                  ? "Plan switching will be re-enabled here after Shopify managed pricing content is published."
+                  : "Direct plan switching becomes available after managed pricing is configured in environment and Partner Dashboard."}
+              </Text>
+            ) : null}
 
             <InlineGrid columns={{ xs: 1, md: 3 }} gap="300">
               {visiblePlans.map((plan) => {
@@ -174,15 +198,17 @@ export default function BillingPage() {
                           </Text>
                         ))}
                       </BlockStack>
-                      {managedPricingUrl ? (
-                        <a href={managedPricingUrl} target="_top" rel="noreferrer" style={{ textDecoration: "none" }}>
+                      {managedPricing.ready && managedPricing.url ? (
+                        <a href={managedPricing.url} target="_top" rel="noreferrer" style={{ textDecoration: "none" }}>
                           <Button variant={isCurrent ? "secondary" : "primary"} fullWidth>
                             {isCurrent ? "Review in Shopify billing" : "Change to this plan"}
                           </Button>
                         </a>
                       ) : (
                         <Text as="p" variant="bodySm" tone="subdued">
-                          Direct plan change link becomes available after setting the managed pricing app handle in environment.
+                          {managedPricing.configured
+                            ? "Plan switching is temporarily hidden until Shopify managed pricing content is published."
+                            : "Direct plan change link becomes available after setting the managed pricing app handle in environment."}
                         </Text>
                       )}
                     </BlockStack>

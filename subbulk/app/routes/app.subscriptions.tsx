@@ -35,6 +35,26 @@ function formatDate(value: string | null) {
   }).format(new Date(value));
 }
 
+function formatPaymentStatus(value: string | null) {
+  if (!value) return "No payment status yet";
+  return value
+    .toLowerCase()
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function paymentMethodTone(status: SubscriptionContractRow["paymentMethodStatus"]) {
+  switch (status) {
+    case "ON_FILE":
+      return "success" as const;
+    case "REVOKED":
+      return "critical" as const;
+    default:
+      return "attention" as const;
+  }
+}
+
 function statusTone(status: SubscriptionContractStatus) {
   switch (status) {
     case "ACTIVE":
@@ -55,6 +75,8 @@ function matchesSearch(row: SubscriptionContractRow, query: string) {
     row.customerEmail,
     row.lineTitle,
     row.status,
+    row.paymentMethodLabel ?? "",
+    row.lastPaymentStatus ?? "",
   ].some((value) => value.toLowerCase().includes(normalized));
 }
 
@@ -263,6 +285,11 @@ export default function SubscriptionsPage() {
                         <Text as="p" variant="bodySm" tone="subdued">
                           Qty {row.quantity}
                         </Text>
+                        <InlineStack gap="200" blockAlign="center" wrap>
+                          <Badge tone={paymentMethodTone(row.paymentMethodStatus)}>
+                            {row.paymentMethodLabel || "Payment method not visible yet"}
+                          </Badge>
+                        </InlineStack>
                       </BlockStack>
 
                       <BlockStack gap="100">
@@ -271,6 +298,9 @@ export default function SubscriptionsPage() {
                         </Text>
                         <Text as="p" variant="bodyMd">
                           {formatDate(row.nextBillingDate)}
+                        </Text>
+                        <Text as="p" variant="bodySm" tone="subdued">
+                          Payment status: {formatPaymentStatus(row.lastPaymentStatus)}
                         </Text>
                         <Text as="p" variant="bodySm" tone="subdued">
                           Created {formatDate(row.createdAt)}

@@ -303,3 +303,24 @@
        - pre-existing build warnings remain unchanged:
           - `NODE_ENV=production` in `.env`
           - CSS minify warning around `@media (--p-breakpoints-md-up) and print`
+41. Production-ready hardening round:
+   * billing reconciliation was hardened so plan resolution now considers normalized GID candidates plus line-item plan names, and subscription reconciliation no longer depends on Shopify array order
+   * extracted pure billing access logic into `app/services/billing-access.shared.ts` and added focused regression coverage for billing path/write gates
+   * customer portal routes now share `app/services/customer-portal-access.shared.ts` so server-side actions verify the submitted `contractId` actually belongs to the current customer before pause/resume/cancel mutations run
+   * removed unsupported `NODE_ENV=production` from `.env` and switched embedded/admin Polaris CSS to `/public/polaris-styles.css`, a patched static copy that avoids the vendor custom-media build warning
+   * latest validation passed with:
+      - `npm test -- app/services/customer-portal-access.shared.test.ts app/services/billing.test.ts app/services/partner-billing.test.ts`
+      - `npm run build` with the previous `.env` and Polaris CSS warnings removed
+   * latest production redeploy from `/home/krizpham/thanhpt-stack` completed successfully and minimal smoke checks confirmed:
+      - `https://app.thanhpt.online/auth/login` -> `200`
+      - `https://admin-app.thanhpt.online/admin/login` -> `200`
+      - direct `curl` to `/apps/subbulk/portal` can still return `400` without Shopify app-proxy context, which is expected
+42. Live billing mapping audit on production:
+   * runtime bug found in `app/db.server.ts`: source runtime and bundled SSR runtime expect different relative paths to the generated Prisma client; fixed with a dual-path loader that tries `../generated/prisma/client` and then `../../generated/prisma/client`
+   * production DB currently contains only one `MerchantPlan` row and it is an internal admin assignment (`planKey=free`, `planName=Free`, raw payload source `internal.portal`), not a live Shopify billing snapshot
+   * no production `MerchantPlan` row currently has `shopifySubscriptionGid`, and no `billing.%unmapped%` merchant events exist yet
+   * added reusable audit command `npm run audit:billing-live` backed by `scripts/billing-live-audit.ts`
+   * validated audit command against the live DB and Shopify session state; result showed the offline session is healthy, but `currentAppInstallation.activeSubscriptions` is currently empty
+   * result: exact production `PARTNER_PLAN_*_GIDS` still cannot be finalized from live data until a real managed-pricing subscription exists to inspect
+   * latest validation after the Prisma loader fix: `npm run build` passed cleanly
+   * one intermediate deploy briefly returned `502` because the single-path fix worked in source runtime but broke the bundled server; the follow-up dual-path fix was redeployed and production recovered (`/auth/login` -> `200`)

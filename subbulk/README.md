@@ -1,355 +1,273 @@
-# Shopify App Template - Remix
+# SubBulk
 
-> [!NOTE]
-> **Remix is now React Router.** As of [React Router v7](https://remix.run/blog/merging-remix-and-react-router), Remix and React Router have merged.
-> 
-> For new projects, use the **[Shopify App Template - React Router](https://github.com/Shopify/shopify-app-template-react-router)** instead.
-> 
-> To migrate your existing Remix app, follow the **[migration guide](https://github.com/Shopify/shopify-app-template-react-router/wiki/Upgrading-from-Remix)**.
+SubBulk là một Shopify app nội bộ, kết hợp 2 trục chính:
 
-This is a template for building a [Shopify app](https://shopify.dev/docs/apps/getting-started) using the [Remix](https://remix.run) framework.
+- subscription app kiểu Seal Subscriptions
+- bulk pricing trên product page, đọc dữ liệu từ product metafield
 
-Rather than cloning this repo, you can use your preferred package manager and the Shopify CLI with [these steps](https://shopify.dev/docs/apps/getting-started/create).
+Ngoài embedded merchant app, repo này còn có một standalone internal admin portal chạy dưới `admin-app.thanhpt.online` để vận hành merchant, package, và internal admin accounts.
 
-Visit the [`shopify.dev` documentation](https://shopify.dev/docs/api/shopify-app-remix) for more details on the Remix app package.
+## Current Status
 
-## Quick start
+Trạng thái hiện tại: dùng được thật cho nội bộ, đã deploy production bằng Docker, và các trục chính đã có nền vận hành.
+
+Đã hoàn thành mức cơ bản:
+
+- storefront bulk pricing widget
+- Shopify discount stacking logic cho bulk + subscription
+- merchant data model, lifecycle, event log, deletion requests
+- billing snapshot + entitlement gate cơ bản
+- async deletion runner
+- standalone internal admin portal
+- merchant operations trong admin portal
+- package management trong admin portal
+- internal admin account management
+
+Chưa hoàn tất hoàn toàn để gọi là MVP production-ready khép kín:
+
+- customer portal đã usable nhưng chưa được browser-verify đầy đủ cho toàn bộ lifecycle trên production mới nhất
+- browser-level regression verification đầy đủ trên production
+- exact live billing identifier mapping với Shopify production data
+
+## Module Checklist
+
+Checklist rất ngắn để bám tiến độ:
+
+- Storefront widget + bulk pricing logic: `xong`
+- Shopify discount stacking ở cart/checkout: `xong`
+- Merchant data model + lifecycle + event log: `xong`
+- Privacy deletion flow + background runner: `xong`
+- Billing snapshot + entitlement gate cơ bản: `xong`
+- Managed pricing entry/link từ merchant app: `xong`
+- Customer portal subscription management: `xong mức cơ bản + đã có ownership guard server-side`
+- Merchant embedded admin cho store operator: `xong mức cơ bản`
+- Internal admin portal standalone: `xong mức cơ bản`
+- Merchant operations trong admin portal: `xong mức cơ bản`
+- Package management trong admin portal: `xong mức cơ bản`
+- Internal admin account management: `xong mức cơ bản`
+- Production deploy flow bằng Docker: `xong`
+- Production browser-level regression verification đầy đủ: `chưa xong`
+- Build hygiene và warning cleanup: `xong`
+
+## Major Implemented Areas
+
+### 1. Storefront + Checkout Pricing
+
+- Widget storefront nằm trong theme extension `extensions/subbulk-buy-box`
+- Bulk pricing đọc từ product metafield
+- Subscription + bulk discount stacking đã được sửa đúng bằng Shopify Product Discount Function
+- Final checkout pricing không còn bị sai khi cart line có selling plan
+
+### 2. Merchant Data Foundation
+
+Prisma đã có các nhóm dữ liệu chính:
+
+- `Merchant`
+- `MerchantPlan`
+- `MerchantEvent`
+- `MerchantDataDeletionRequest`
+- `AdminPlanDefinition`
+- `InternalAdminAccount`
+- các bảng subscription/widget settings của app
+
+### 3. Billing + Entitlements
+
+- có billing snapshot nội bộ cho merchant
+- có entitlement matrix cho `Free`, `Growth`, `Scale`
+- có route-level và action-level write gating
+- có managed pricing entry qua `SHOPIFY_MANAGED_PRICING_APP_HANDLE`
+- có reconciliation route để refresh billing state khi merchant quay lại app
+
+### 4. Privacy + Background Jobs
+
+- merchant có thể tạo deletion request
+- deletion request đi qua trạng thái `pending -> processing -> completed/failed`
+- background processing chạy qua route `/jobs/deletion-requests`
+- Docker stack có `deletion_job_runner` gọi job route theo chu kỳ
+
+### 5. Internal Admin Portal
+
+Portal admin standalone dùng cookie auth riêng, không phụ thuộc embedded Shopify auth.
+
+Các màn chính:
+
+- `/admin/login`
+- `/admin`
+- `/admin/merchants`
+- `/admin/merchants/:merchantId`
+- `/admin/subscriptions`
+- `/admin/admins`
+
+Các capability hiện có:
+
+- tìm kiếm và lọc merchant
+- click domain merchant hoặc nút `Detail` để mở merchant detail
+- tạo merchant thủ công
+- export merchant XML
+- cập nhật merchant status
+- assign package snapshot
+- thêm internal note
+- chỉnh package definitions từ DB
+- tạo/sửa/xóa internal admin account
+
+Các cập nhật UX gần nhất đã lên production:
+
+- merchant list dùng nested route thật cho merchant detail
+- fix crash React khi navigate client-side vào merchant detail
+- package screen dùng toast thay cho banner cứng
+- save button rõ ràng hơn và có trạng thái `Saving...`
+- internal admin account actions dùng toast + reset form
+- merchant detail note dùng toast + reset form
+
+## Production Deployment
+
+### Nguồn sự thật để deploy backend
+
+Lưu ý quan trọng:
+
+- `shopify app deploy` chỉ publish app version và extension lên Shopify
+- nó không deploy backend Remix tự host của repo này
+
+Muốn code backend hoặc admin portal lên production, phải rebuild Docker stack tại:
+
+- `/home/krizpham/thanhpt-stack`
+
+Lệnh deploy thực tế:
+
+```bash
+cd /home/krizpham/thanhpt-stack
+docker compose up -d --build shopify_app
+```
+
+Container backend production hiện tại:
+
+- `thanhpt-shopify_app-1`
+
+Portal admin production:
+
+- `admin-app.thanhpt.online`
+
+App production dùng chung container backend với merchant embedded app.
+
+## Local Development
 
 ### Prerequisites
 
-Before you begin, you'll need the following:
+- Node.js phù hợp với `package.json`
+- npm
+- Shopify CLI
+- PostgreSQL
 
-1. **Node.js**: [Download and install](https://nodejs.org/en/download/) it if you haven't already.
-2. **Shopify Partner Account**: [Create an account](https://partners.shopify.com/signup) if you don't have one.
-3. **Test Store**: Set up either a [development store](https://help.shopify.com/en/partners/dashboard/development-stores#create-a-development-store) or a [Shopify Plus sandbox store](https://help.shopify.com/en/partners/dashboard/managing-stores/plus-sandbox-store) for testing your app.
-4. **Shopify CLI**: [Download and install](https://shopify.dev/docs/apps/tools/cli/getting-started) it if you haven't already.
-```shell
-npm install -g @shopify/cli@latest
-```
+### Useful Commands
 
-### Setup
-
-```shell
-shopify app init --template=https://github.com/Shopify/shopify-app-template-remix
-```
-
-### Local Development
-
-```shell
-shopify app dev
-```
-
-
-
-Local development is powered by [the Shopify CLI](https://shopify.dev/docs/apps/tools/cli). It logs into your partners account, connects to an app, provides environment variables, updates remote config, creates a tunnel and provides commands to generate extensions.
-
-### Authenticating and querying data
-
-To authenticate and query data you can use the `shopify` const that is exported from `/app/shopify.server.js`:
-
-```js
-export async function loader({ request }) {
-  const { admin } = await shopify.authenticate.admin(request);
-
-  const response = await admin.graphql(`
-    {
-      products(first: 25) {
-        nodes {
-          title
-          description
-        }
-      }
-    }`);
-
-  const {
-    data: {
-      products: { nodes },
-    },
-  } = await response.json();
-
-  return nodes;
-}
-```
-
-This template comes preconfigured with examples of:
-
-1. Setting up your Shopify app in [/app/shopify.server.ts](https://github.com/Shopify/shopify-app-template-remix/blob/main/app/shopify.server.ts)
-2. Querying data using Graphql. Please see: [/app/routes/app.\_index.tsx](https://github.com/Shopify/shopify-app-template-remix/blob/main/app/routes/app._index.tsx).
-3. Responding to webhooks in individual files such as [/app/routes/webhooks.app.uninstalled.tsx](https://github.com/Shopify/shopify-app-template-remix/blob/main/app/routes/webhooks.app.uninstalled.tsx) and [/app/routes/webhooks.app.scopes_update.tsx](https://github.com/Shopify/shopify-app-template-remix/blob/main/app/routes/webhooks.app.scopes_update.tsx)
-
-Please read the [documentation for @shopify/shopify-app-remix](https://www.npmjs.com/package/@shopify/shopify-app-remix#authenticating-admin-requests) to understand what other API's are available.
-
-## Deployment
-
-### Application Storage
-
-This template uses [Prisma](https://www.prisma.io/) to store session data, by default using an [SQLite](https://www.sqlite.org/index.html) database.
-The database is defined as a Prisma schema in `prisma/schema.prisma`.
-
-This use of SQLite works in production if your app runs as a single instance.
-The database that works best for you depends on the data your app needs and how it is queried.
-You can run your database of choice on a server yourself or host it with a SaaS company.
-Here's a short list of databases providers that provide a free tier to get started:
-
-| Database   | Type             | Hosters                                                                                                                                                                                                                               |
-| ---------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| MySQL      | SQL              | [Digital Ocean](https://www.digitalocean.com/products/managed-databases-mysql), [Planet Scale](https://planetscale.com/), [Amazon Aurora](https://aws.amazon.com/rds/aurora/), [Google Cloud SQL](https://cloud.google.com/sql/docs/mysql) |
-| PostgreSQL | SQL              | [Digital Ocean](https://www.digitalocean.com/products/managed-databases-postgresql), [Amazon Aurora](https://aws.amazon.com/rds/aurora/), [Google Cloud SQL](https://cloud.google.com/sql/docs/postgres)                                   |
-| Redis      | Key-value        | [Digital Ocean](https://www.digitalocean.com/products/managed-databases-redis), [Amazon MemoryDB](https://aws.amazon.com/memorydb/)                                                                                                        |
-| MongoDB    | NoSQL / Document | [Digital Ocean](https://www.digitalocean.com/products/managed-databases-mongodb), [MongoDB Atlas](https://www.mongodb.com/atlas/database)                                                                                                  |
-
-To use one of these, you can use a different [datasource provider](https://www.prisma.io/docs/reference/api-reference/prisma-schema-reference#datasource) in your `schema.prisma` file, or a different [SessionStorage adapter package](https://github.com/Shopify/shopify-api-js/blob/main/packages/shopify-api/docs/guides/session-storage.md).
-
-### Build
-
-Remix handles building the app for you, by running the command below with the package manager of your choice:
-
-Using yarn:
-
-```shell
-yarn build
-```
-
-Using npm:
-
-```shell
+```bash
+npm install
 npm run build
+npm test
+npx prisma generate
+npm run dev
 ```
 
-Using pnpm:
+Nếu cần start production-style local server sau khi build:
 
-```shell
-pnpm run build
+```bash
+npm run setup
+npm run start
 ```
 
-## Hosting
+## Important Environment Variables
 
-When you're ready to set up your app in production, you can follow [our deployment documentation](https://shopify.dev/docs/apps/deployment/web) to host your app on a cloud provider like [Heroku](https://www.heroku.com/) or [Fly.io](https://fly.io/).
+### Billing / plan mapping
 
-When you reach the step for [setting up environment variables](https://shopify.dev/docs/apps/deployment/web#set-env-vars), you also need to set the variable `NODE_ENV=production`.
+- `PARTNER_PLAN_FREE_NAMES`
+- `PARTNER_PLAN_GROWTH_NAMES`
+- `PARTNER_PLAN_SCALE_NAMES`
+- `PARTNER_PLAN_FREE_GIDS`
+- `PARTNER_PLAN_GROWTH_GIDS`
+- `PARTNER_PLAN_SCALE_GIDS`
+- `SHOPIFY_MANAGED_PRICING_APP_HANDLE`
 
-### Production Notes For This Repo
+### Background jobs
 
-This repository uses a self-hosted Docker stack from [thanhpt-stack/docker-compose.yml](../../thanhpt-stack/docker-compose.yml).
+- `JOB_RUNNER_SECRET`
+- `DELETION_JOB_INTERVAL_SECONDS`
 
-Required env vars for merchant billing and deletion jobs:
+### Internal admin portal
 
-- `PARTNER_PLAN_FREE_NAMES`, `PARTNER_PLAN_GROWTH_NAMES`, `PARTNER_PLAN_SCALE_NAMES`: comma-separated plan names exactly as they appear in the Shopify Partner Dashboard.
-- `PARTNER_PLAN_FREE_GIDS`, `PARTNER_PLAN_GROWTH_GIDS`, `PARTNER_PLAN_SCALE_GIDS`: optional comma-separated subscription GIDs for exact plan matching.
-- `JOB_RUNNER_SECRET`: shared secret used by the deletion queue route at `/jobs/deletion-requests`.
-- `DELETION_JOB_INTERVAL_SECONDS`: polling interval for the external deletion job runner service in Docker Compose.
-- `INTERNAL_ADMIN_SESSION_SECRET`: cookie-session secret for the standalone internal admin portal.
-- `INTERNAL_ADMIN_PORTAL_ACCOUNTS`: comma-separated internal admin accounts in the format `email:password:display name`.
+- `INTERNAL_ADMIN_SESSION_SECRET`
 
-The `deletion_job_runner` service calls `POST http://shopify_app:3000/jobs/deletion-requests` on an interval with the `x-job-secret` header so deletion requests are processed without manual intervention.
+Lưu ý:
 
-The internal portal is served on `admin-app.thanhpt.online` and uses its own cookie-based login flow at `/admin/login` instead of Shopify embedded authentication.
+- internal admin accounts hiện đã nằm trong DB
+- không còn nên dùng `INTERNAL_ADMIN_PORTAL_ACCOUNTS` như nguồn auth runtime chính
 
-### Hosting on Vercel
+## Known Gaps Before MVP Production-Ready
 
-Using the Vercel Preset is recommended when hosting your Shopify Remix app on Vercel. You'll also want to ensure imports that would normally come from `@remix-run/node` are imported from `@vercel/remix` instead. Learn more about hosting Remix apps on Vercel [here](https://vercel.com/docs/frameworks/remix).
+Đây là những hạng mục còn thiếu quan trọng nhất:
 
-```diff
-// vite.config.ts
-import { vitePlugin as remix } from "@remix-run/dev";
-import { defineConfig, type UserConfig } from "vite";
-import tsconfigPaths from "vite-tsconfig-paths";
-+ import { vercelPreset } from '@vercel/remix/vite';
+1. chưa có vòng browser regression đầy đủ trên production cho các flow chính sau deploy mới nhất
+2. billing reconciliation với live Shopify identifiers chưa chốt sạch bằng production data thật
+3. production store hiện query được `currentAppInstallation.activeSubscriptions` nhưng đang trả rỗng, nên chưa có live paid subscription identifier để điền `PARTNER_PLAN_*_GIDS`
+4. admin flow mới chưa có test coverage đủ sâu cho regression prevention
+5. chưa có release tagging/rollback workflow riêng ngoài redeploy từ source revision trước đó
 
-installGlobals();
+## Ops Quick Reference
 
-export default defineConfig({
-  plugins: [
-    remix({
-      ignoredRouteFiles: ["**/.*"],
-+     presets: [vercelPreset()],
-    }),
-    tsconfigPaths(),
-  ],
-});
+### Deploy backend production
+
+```bash
+cd /home/krizpham/thanhpt-stack
+docker compose up -d --build shopify_app
 ```
 
-## Troubleshooting
+### Check runtime status
 
-### Database tables don't exist
-
-If you get this error:
-
-```
-The table `main.Session` does not exist in the current database.
-```
-
-You need to create the database for Prisma. Run the `setup` script in `package.json` using your preferred package manager.
-
-### Navigating/redirecting breaks an embedded app
-
-Embedded Shopify apps must maintain the user session, which can be tricky inside an iFrame. To avoid issues:
-
-1. Use `Link` from `@remix-run/react` or `@shopify/polaris`. Do not use `<a>`.
-2. Use the `redirect` helper returned from `authenticate.admin`. Do not use `redirect` from `@remix-run/node`
-3. Use `useSubmit` or `<Form/>` from `@remix-run/react`. Do not use a lowercase `<form/>`.
-
-This only applies if your app is embedded, which it will be by default.
-
-### Non Embedded
-
-Shopify apps are best when they are embedded in the Shopify Admin, which is how this template is configured. If you have a reason to not embed your app please make the following changes:
-
-1. Ensure `embedded = false` is set in [shopify.app.toml`](./shopify.app.toml). [Docs here](https://shopify.dev/docs/apps/build/cli-for-apps/app-configuration#global).
-2. Pass `isEmbeddedApp: false` to `shopifyApp()` in `./app/shopify.server.js|ts`.
-3. Change the `isEmbeddedApp` prop to `isEmbeddedApp={false}` for the `AppProvider` in `/app/routes/app.jsx|tsx`.
-4. Remove the `@shopify/app-bridge-react` dependency from [package.json](./package.json) and `vite.config.ts|js`.
-5. Remove anything imported from `@shopify/app-bridge-react`.  For example: `NavMenu`, `TitleBar` and `useAppBridge`.
-
-### OAuth goes into a loop when I change my app's scopes
-
-If you change your app's scopes and authentication goes into a loop and fails with a message from Shopify that it tried too many times, you might have forgotten to update your scopes with Shopify.
-To do that, you can run the `deploy` CLI command.
-
-Using yarn:
-
-```shell
-yarn deploy
+```bash
+cd /home/krizpham/thanhpt-stack
+docker compose ps
+docker compose logs --tail=200 shopify_app
+docker compose logs --tail=200 deletion_job_runner
 ```
 
-Using npm:
+### Minimal HTTP smoke checks
 
-```shell
-npm run deploy
+```bash
+curl -I https://app.thanhpt.online/auth/login
+curl -I https://admin-app.thanhpt.online/admin/login
 ```
 
-Using pnpm:
+### Live billing audit
 
-```shell
-pnpm run deploy
+```bash
+npm run audit:billing-live
 ```
 
-### My shop-specific webhook subscriptions aren't updated
+Nếu Postgres không reachable từ host với `DATABASE_URL` mặc định, chạy command với `DATABASE_URL` override tới DB thực tế trước khi audit.
 
-If you are registering webhooks in the `afterAuth` hook, using `shopify.registerWebhooks`, you may find that your subscriptions aren't being updated.  
+Lưu ý:
 
-Instead of using the `afterAuth` hook, the recommended approach is to declare app-specific webhooks in the `shopify.app.toml` file.  This approach is easier since Shopify will automatically update changes to webhook subscriptions every time you run `deploy` (e.g: `npm run deploy`).  Please read these guides to understand more:
+- app proxy customer portal `/apps/subbulk/portal` cần request có context/chữ ký từ Shopify; gọi thẳng bằng `curl` có thể trả `400` là bình thường
+- smoke check production gần nhất sau deploy mới đã xác nhận `app.thanhpt.online/auth/login` và `admin-app.thanhpt.online/admin/login` trả `200`
 
-1. [app-specific vs shop-specific webhooks](https://shopify.dev/docs/apps/build/webhooks/subscribe#app-specific-subscriptions)
-2. [Create a subscription tutorial](https://shopify.dev/docs/apps/build/webhooks/subscribe/get-started?framework=remix&deliveryMethod=https)
+### Rollback hiện tại
 
-If you do need shop-specific webhooks, please keep in mind that the package calls `afterAuth` in 2 scenarios:
+Hiện chưa có release image tagging riêng cho `shopify_app`.
 
-- After installing the app
-- When an access token expires
+Rollback an toàn nhất lúc này là:
 
-During normal development, the app won't need to re-authenticate most of the time, so shop-specific subscriptions aren't updated. To force your app to update the subscriptions, you can uninstall and reinstall it in your development store. That will force the OAuth process and call the `afterAuth` hook.
+1. checkout source revision cuối cùng đã biết là ổn trong `/home/krizpham/shopify-bulk-app/subbulk`
+2. rebuild lại từ `/home/krizpham/thanhpt-stack`
+3. chạy lại minimal smoke checks ở trên
 
-### Admin created webhook failing HMAC validation
+## Notes For Future Changes
 
-Webhooks subscriptions created in the [Shopify admin](https://help.shopify.com/en/manual/orders/notifications/webhooks) will fail HMAC validation. This is because the webhook payload is not signed with your app's secret key.  There are 2 solutions:
-
-1. Use [app-specific webhooks](https://shopify.dev/docs/apps/build/webhooks/subscribe#app-specific-subscriptions) defined in your toml file instead (recommended)
-2. Create [webhook subscriptions](https://shopify.dev/docs/api/shopify-app-remix/v1/guide-webhooks) using the `shopifyApp` object.
-
-Test your webhooks with the [Shopify CLI](https://shopify.dev/docs/apps/tools/cli/commands#webhook-trigger) or by triggering events manually in the Shopify admin(e.g. Updating the product title to trigger a `PRODUCTS_UPDATE`).
-
-### Incorrect GraphQL Hints
-
-By default the [graphql.vscode-graphql](https://marketplace.visualstudio.com/items?itemName=GraphQL.vscode-graphql) extension for VS Code will assume that GraphQL queries or mutations are for the [Shopify Admin API](https://shopify.dev/docs/api/admin). This is a sensible default, but it may not be true if:
-
-1. You use another Shopify API such as the storefront API.
-2. You use a third party GraphQL API.
-
-in this situation, please update the [.graphqlrc.ts](https://github.com/Shopify/shopify-app-template-remix/blob/main/.graphqlrc.ts) config.
-
-### First parameter has member 'readable' that is not a ReadableStream.
-
-See [hosting on Vercel](#hosting-on-vercel).
-
-### Admin object undefined on webhook events triggered by the CLI
-
-When you trigger a webhook event using the Shopify CLI, the `admin` object will be `undefined`. This is because the CLI triggers an event with a valid, but non-existent, shop. The `admin` object is only available when the webhook is triggered by a shop that has installed the app.
-
-Webhooks triggered by the CLI are intended for initial experimentation testing of your webhook configuration. For more information on how to test your webhooks, see the [Shopify CLI documentation](https://shopify.dev/docs/apps/tools/cli/commands#webhook-trigger).
-
-### Using Defer & await for streaming responses
-
-To test [streaming using defer/await](https://remix.run/docs/en/main/guides/streaming) during local development you'll need to use the Shopify CLI slightly differently:
-
-1. First setup ngrok: https://ngrok.com/product/secure-tunnels
-2. Create an ngrok tunnel on port 8080: `ngrok http 8080`.
-3. Copy the forwarding address. This should be something like: `https://f355-2607-fea8-bb5c-8700-7972-d2b5-3f2b-94ab.ngrok-free.app`
-4. In a separate terminal run `yarn shopify app dev --tunnel-url=TUNNEL_URL:8080` replacing `TUNNEL_URL` for the address you copied in step 3.
-
-By default the CLI uses a cloudflare tunnel. Unfortunately it cloudflare tunnels wait for the Response stream to finish, then sends one chunk.
-
-This will not affect production, since tunnels are only for local development.
-
-### Using MongoDB and Prisma
-
-By default this template uses SQLlite as the database. It is recommended to move to a persisted database for production. If you choose to use MongoDB, you will need to make some modifications to the schema and prisma configuration. For more information please see the [Prisma MongoDB documentation](https://www.prisma.io/docs/orm/overview/databases/mongodb).
-
-Alternatively you can use a MongDB database directly with the [MongoDB session storage adapter](https://github.com/Shopify/shopify-app-js/tree/main/packages/apps/session-storage/shopify-app-session-storage-mongodb).
-
-#### Mapping the id field
-
-In MongoDB, an ID must be a single field that defines an @id attribute and a @map("\_id") attribute.
-The prisma adapter expects the ID field to be the ID of the session, and not the \_id field of the document.
-
-To make this work you can add a new field to the schema that maps the \_id field to the id field. For more information see the [Prisma documentation](https://www.prisma.io/docs/orm/prisma-schema/data-model/models#defining-an-id-field)
-
-```prisma
-model Session {
-  session_id  String    @id @default(auto()) @map("_id") @db.ObjectId
-  id          String    @unique
-...
-}
-```
-
-#### Error: The "mongodb" provider is not supported with this command
-
-MongoDB does not support the [prisma migrate](https://www.prisma.io/docs/orm/prisma-migrate/understanding-prisma-migrate/overview) command. Instead, you can use the [prisma db push](https://www.prisma.io/docs/orm/reference/prisma-cli-reference#db-push) command and update the `shopify.web.toml` file with the following commands. If you are using MongoDB please see the [Prisma documentation](https://www.prisma.io/docs/orm/overview/databases/mongodb) for more information.
-
-```toml
-[commands]
-predev = "npx prisma generate && npx prisma db push"
-dev = "npm exec remix vite:dev"
-```
-
-#### Prisma needs to perform transactions, which requires your mongodb server to be run as a replica set
-
-See the [Prisma documentation](https://www.prisma.io/docs/getting-started/setup-prisma/start-from-scratch/mongodb/connect-your-database-node-mongodb) for connecting to a MongoDB database.
-
-### I want to use Polaris v13.0.0 or higher
-
-Currently, this template is set up to work on node v18.20 or higher. However, `@shopify/polaris` is limited to v12 because v13 can only run on node v20+.
-
-You don't have to make any changes to the code in order to be able to upgrade Polaris to v13, but you'll need to do the following:
-
-- Upgrade your node version to v20.10 or higher.
-- Update your `Dockerfile` to pull `FROM node:20-alpine` instead of `node:18-alpine`
-
-### "nbf" claim timestamp check failed
-
-This error will occur of the `nbf` claim timestamp check failed. This is because the JWT token is expired.
-If you  are consistently getting this error, it could be that the clock on your machine is not in sync with the server.
-
-To fix this ensure you have enabled `Set time and date automatically` in the `Date and Time` settings on your computer.
-
-## Benefits
-
-Shopify apps are built on a variety of Shopify tools to create a great merchant experience.
-
-<!-- TODO: Uncomment this after we've updated the docs -->
-<!-- The [create an app](https://shopify.dev/docs/apps/getting-started/create) tutorial in our developer documentation will guide you through creating a Shopify app using this template. -->
-
-The Remix app template comes with the following out-of-the-box functionality:
-
-- [OAuth](https://github.com/Shopify/shopify-app-js/tree/main/packages/shopify-app-remix#authenticating-admin-requests): Installing the app and granting permissions
-- [GraphQL Admin API](https://github.com/Shopify/shopify-app-js/tree/main/packages/shopify-app-remix#using-the-shopify-admin-graphql-api): Querying or mutating Shopify admin data
-- [Webhooks](https://github.com/Shopify/shopify-app-js/tree/main/packages/shopify-app-remix#authenticating-webhook-requests): Callbacks sent by Shopify when certain events occur
-- [AppBridge](https://shopify.dev/docs/api/app-bridge): This template uses the next generation of the Shopify App Bridge library which works in unison with previous versions.
-- [Polaris](https://polaris.shopify.com/): Design system that enables apps to create Shopify-like experiences
-
-## Tech Stack
-
-This template uses [Remix](https://remix.run). The following Shopify tools are also included to ease app development:
+- Khi sửa `app/routes/admin.merchants.tsx`, phải giữ tất cả hooks ở trên nhánh `if (merchantId) return <Outlet />` để tránh lặp lại lỗi hook order trên production.
+- Khi sửa admin portal routes, nhớ rằng source edit chỉ có hiệu lực sau khi rebuild `shopify_app` từ Docker stack.
+- Khi sửa `app/routes/apps.subbulk.portal.tsx`, phải luôn xác minh `contractId` thực sự thuộc `logged_in_customer_id` ở server side trước khi gọi pause/resume/cancel mutation.
+- Embedded/admin login hiện tải Polaris từ `/public/polaris-styles.css`, là bản vá tĩnh sinh từ Polaris upstream để tránh warning build custom-media của vendor CSS.
+- `app/db.server.ts` phải resolve Prisma runtime theo cả hai layout source/build; hiện code thử lần lượt `../generated/prisma/client` rồi `../../generated/prisma/client` để tương thích cả local runtime script lẫn SSR bundle production.
+- `npm run audit:billing-live` là command chuẩn để kiểm tra offline session, latest `MerchantPlan`, `billing.%unmapped%` events, và live `currentAppInstallation.activeSubscriptions` trong một lần chạy.
+- Project memory chi tiết hơn hiện được lưu tại `memory.md` trong thư mục này và repo memory nội bộ của Copilot.
 
 - [Shopify App Remix](https://shopify.dev/docs/api/shopify-app-remix) provides authentication and methods for interacting with Shopify APIs.
 - [Shopify App Bridge](https://shopify.dev/docs/apps/tools/app-bridge) allows your app to seamlessly integrate your app within Shopify's Admin.

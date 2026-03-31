@@ -14,6 +14,30 @@ describe("resolvePartnerDashboardPlan", () => {
     expect(resolved.planKey).toBe("scale");
     expect(resolved.matchedBy).toBe("heuristic");
   });
+
+  it("maps by gid when env provides a full Shopify gid", () => {
+    process.env.PARTNER_PLAN_SCALE_GIDS = "gid://shopify/AppSubscription/12345";
+
+    const resolved = resolvePartnerDashboardPlan({
+      shopifySubscriptionGid: "gid://shopify/AppSubscription/12345",
+      planName: "Managed plan",
+    });
+
+    expect(resolved.planKey).toBe("scale");
+    expect(resolved.matchedBy).toBe("gid");
+
+    delete process.env.PARTNER_PLAN_SCALE_GIDS;
+  });
+
+  it("uses line item plan names as a secondary signal", () => {
+    const resolved = resolvePartnerDashboardPlan({
+      planName: "Managed plan",
+      lineItemPlanNames: ["SubBulk Premium Monthly"],
+    });
+
+    expect(resolved.planKey).toBe("growth");
+    expect(resolved.matchedBy).toBe("heuristic");
+  });
 });
 
 describe("resolveEntitlements", () => {

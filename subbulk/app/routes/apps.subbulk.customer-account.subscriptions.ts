@@ -1,6 +1,11 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { listCustomerSubscriptionContracts } from "../models/subscription-contracts.server";
+import {
+  customerOwnsContract,
+  isValidSubscriptionContractGid,
+  normalizeCustomerGid,
+} from "../services/customer-portal-access.shared";
 import { authenticate, unauthenticated } from "../shopify.server";
 
 type CustomerAccountIntent = "pause" | "resume" | "cancel";
@@ -10,20 +15,6 @@ const ACTION_SUCCESS_MESSAGE: Record<CustomerAccountIntent, string> = {
   resume: "Your subscription has been resumed.",
   cancel: "Your subscription has been cancelled.",
 };
-
-function normalizeCustomerIdentifier(value: string | null) {
-  if (!value) return null;
-
-  if (value.startsWith("gid://shopify/Customer/")) {
-    return value;
-  }
-
-  if (/^\d+$/.test(value)) {
-    return `gid://shopify/Customer/${value}`;
-  }
-
-  return null;
-}
 
 function extractMyshopifyDomain(value: string | null | undefined) {
   if (!value) return null;
@@ -154,7 +145,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   }
 
   try {
-    const customerId = normalizeCustomerIdentifier(sessionToken.sub);
+    const customerId = normalizeCustomerGid(sessionToken.sub);
     if (!customerId) {
       return cors(
         json(
@@ -198,7 +189,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         );
       }
 
-      if (!contractId.startsWith("gid://shopify/SubscriptionContract/")) {
+      if (!isValidSubscriptionContractGid(contractId)) {
         return cors(
           json(
             {
@@ -211,7 +202,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       }
 
       const existingContracts = await listCustomerSubscriptionContracts(admin, customerId, 50);
-      if (!existingContracts.some((contract) => contract.id === contractId)) {
+      if (!customerOwnsContract(existingContracts, contractId)) {
         return cors(
           json(
             {
@@ -246,6 +237,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         contracts,
         success,
         portalUrl: buildPortalUrl(shop),
+        paymentMethodHelp:
+          "Payment methods stay managed securely by Shopify. If a saved method needs attention, update it in the store account or contact the merchant.",
       }),
     );
   } catch (error) {

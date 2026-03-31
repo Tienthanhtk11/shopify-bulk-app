@@ -11,6 +11,11 @@ import {
 } from "@remix-run/react";
 import { useMemo, useState } from "react";
 import { listCustomerSubscriptionContracts } from "../models/subscription-contracts.server";
+import {
+  customerOwnsContract,
+  isValidSubscriptionContractGid,
+  normalizeCustomerGid,
+} from "../services/customer-portal-access.shared";
 import { getOrCreateWidgetSettings } from "../models/widget-settings.server";
 import { authenticate } from "../shopify.server";
 
@@ -20,6 +25,9 @@ type ContractRow = {
   status: string;
   createdAt: string;
   nextBillingDate: string | null;
+  lastPaymentStatus: string | null;
+  paymentMethodLabel: string | null;
+  paymentMethodStatus: "ON_FILE" | "REVOKED" | "UNAVAILABLE";
   lineTitle: string;
   quantity: number;
 };
@@ -422,6 +430,15 @@ function formatDate(value: string | null, withTime = false) {
   }).format(date);
 }
 
+function formatPaymentStatus(value: string | null) {
+  if (!value) return "No payment status yet";
+  return value
+    .toLowerCase()
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
 function statusMeta(status: string) {
   switch (status) {
     case "ACTIVE":
@@ -474,7 +491,9 @@ function buildStatusCounts(contracts: ContractRow[]) {
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const ctx = await authenticate.public.appProxy(request);
   const url = new URL(request.url);
-  const loggedInCustomerId = url.searchParams.get("logged_in_customer_id");
+  const loggedInCustomerId = normalizeCustomerGid(
+    url.searchParams.get("logged_in_customer_id"),
+  );
   const shop = normalizeShop(url.searchParams.get("shop"));
   const theme = shop
     ? await getOrCreateWidgetSettings(shop)
@@ -498,10 +517,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     } satisfies LoaderData;
   }
 
-  const customerGid = `gid://shopify/Customer/${loggedInCustomerId}`;
   const contracts: ContractRow[] = await listCustomerSubscriptionContracts(
     ctx.admin,
-    customerGid,
+    loggedInCustomerId,
     20,
   );
 
@@ -518,12 +536,32 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (!ctx.admin) {
     return json({ error: "Your store session is not available right now." } satisfies ActionData);
   }
+
+  const url = new URL(request.url);
+  const loggedInCustomerId = normalizeCustomerGid(
+    url.searchParams.get("logged_in_customer_id"),
+  );
+
+  if (!loggedInCustomerId) {
+    return json({ error: "Sign in to manage your subscriptions." } satisfies ActionData);
+  }
+
   const fd = await request.formData();
   const intent = String(fd.get("intent"));
   const contractId = String(fd.get("contractId") || "");
 
-  if (!contractId.startsWith("gid://shopify/SubscriptionContract/")) {
+  if (!isValidSubscriptionContractGid(contractId)) {
     return json({ error: "The subscription reference is invalid." } satisfies ActionData);
+  }
+
+  const existingContracts = await listCustomerSubscriptionContracts(
+    ctx.admin,
+    loggedInCustomerId,
+    50,
+  );
+
+  if (!customerOwnsContract(existingContracts, contractId)) {
+    return json({ error: "This subscription does not belong to the current customer." } satisfies ActionData, { status: 403 });
   }
 
   try {
@@ -859,6 +897,10 @@ export default function SubbulkCustomerPortal() {
               Review your subscription status, check the next billing date, and
               pause, resume, or cancel each plan from one page.
             </p>
+            <div style={{ ...styles.contractMeta, marginTop: 18, marginBottom: 0 }} className="subbulk-portal__pills">
+              <span style={styles.metaPill} className="subbulk-portal__pill">Saved payment methods stay managed by Shopify</span>
+              <span style={styles.metaPill} className="subbulk-portal__pill">Last payment status is shown per subscription</span>
+            </div>
             <div style={styles.statsGrid} className="subbulk-portal__stats">
               <div style={styles.statCard} className="subbulk-portal__stat">
                 <div style={styles.statLabel} className="subbulk-portal__stat-label">Total plans</div>
@@ -979,6 +1021,12 @@ export default function SubbulkCustomerPortal() {
                       </span>
                       <span style={styles.metaPill} className="subbulk-portal__pill">
                         Quantity per order: {contract.quantity}
+                      </span>
+                      <span style={styles.metaPill} className="subbulk-portal__pill">
+                        Payment method: {contract.paymentMethodLabel || "Not visible yet"}
+                      </span>
+                      <span style={styles.metaPill} className="subbulk-portal__pill">
+                        Last payment: {formatPaymentStatus(contract.lastPaymentStatus)}
                       </span>
                     </div>
 

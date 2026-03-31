@@ -3,14 +3,13 @@ import { Link, Outlet, useLoaderData, useRouteError } from "@remix-run/react";
 import { boundary } from "@shopify/shopify-app-remix/server";
 import { AppProvider } from "@shopify/shopify-app-remix/react";
 import { NavMenu } from "@shopify/app-bridge-react";
-import polarisStyles from "@shopify/polaris/build/esm/styles.css?url";
 
 import { getLatestMerchantPlan, upsertMerchantFromSession } from "../models/merchant.server";
 import { merchantCanAccessPath } from "../services/billing.server";
 import { isInternalAdminSession } from "../services/internal-admin.server";
 import { authenticate } from "../shopify.server";
 
-export const links = () => [{ rel: "stylesheet", href: polarisStyles }];
+export const links = () => [{ rel: "stylesheet", href: "/polaris-styles.css" }];
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session, redirect } = await authenticate.admin(request);

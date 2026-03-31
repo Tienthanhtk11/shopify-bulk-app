@@ -5,6 +5,7 @@ import { resolvePartnerDashboardPlan } from "./partner-billing.server";
 type ActiveSubscriptionSnapshot = {
   subscriptionGid: string | null;
   name: string;
+  lineItemPlanNames: string[];
   status: string;
   isTest: boolean;
   billingInterval: string | null;
@@ -44,17 +45,67 @@ function extractBillingInterval(lineItems: unknown) {
   return readString(pricingDetails?.interval);
 }
 
+function extractLineItemPlanNames(lineItems: unknown) {
+  if (!Array.isArray(lineItems) || lineItems.length === 0) return [] as string[];
+
+  return lineItems
+    .map((lineItem) => {
+      if (typeof lineItem !== "object" || lineItem === null) return null;
+      const lineItemRecord = lineItem as Record<string, unknown>;
+      const plan =
+        typeof lineItemRecord.plan === "object" && lineItemRecord.plan !== null
+          ? (lineItemRecord.plan as Record<string, unknown>)
+          : null;
+
+      return readString(plan?.name) || readString(lineItemRecord.name);
+    })
+    .filter((value): value is string => Boolean(value));
+}
+
+function planPriority(planKey: ActiveSubscriptionSnapshot["matchedPlanKey"]) {
+  if (planKey === "scale") return 3;
+  if (planKey === "growth") return 2;
+  return 1;
+}
+
+function statusPriority(status: string) {
+  if (status === "active") return 4;
+  if (status === "trialing") return 3;
+  if (status === "accepted") return 2;
+  if (status === "pending") return 1;
+  return 0;
+}
+
+function selectPrimarySnapshot(snapshots: ActiveSubscriptionSnapshot[]) {
+  return [...snapshots].sort((left, right) => {
+    const statusDelta = statusPriority(right.status) - statusPriority(left.status);
+    if (statusDelta !== 0) return statusDelta;
+
+    const planDelta = planPriority(right.matchedPlanKey) - planPriority(left.matchedPlanKey);
+    if (planDelta !== 0) return planDelta;
+
+    if (left.isTest !== right.isTest) {
+      return Number(left.isTest) - Number(right.isTest);
+    }
+
+    return left.name.localeCompare(right.name);
+  })[0];
+}
+
 function toSnapshot(subscription: Record<string, unknown>): ActiveSubscriptionSnapshot {
   const name = String(subscription.name || "Managed plan");
   const subscriptionGid = readString(subscription.id);
+  const lineItemPlanNames = extractLineItemPlanNames(subscription.lineItems);
   const resolvedPlan = resolvePartnerDashboardPlan({
     planName: name,
     shopifySubscriptionGid: subscriptionGid,
+    lineItemPlanNames,
   });
 
   return {
     subscriptionGid,
     name,
+    lineItemPlanNames,
     status: normalizeStatus(subscription.status),
     isTest: readBoolean(subscription.test),
     billingInterval: extractBillingInterval(subscription.lineItems),
@@ -130,7 +181,7 @@ export async function reconcileMerchantBillingFromAdmin(admin: AdminApiContext, 
     };
   }
 
-  const primary = snapshots[0];
+  const primary = selectPrimarySnapshot(snapshots);
   const latestPlan = await getLatestMerchantPlan(shopDomain);
   const changed = snapshotChanged(latestPlan, primary);
 
@@ -162,6 +213,19 @@ export async function reconcileMerchantBillingFromAdmin(admin: AdminApiContext, 
       totalSubscriptions: snapshots.length,
     },
   });
+
+  if (primary.matchedBy === "default") {
+    await recordMerchantEvent({
+      shopDomain,
+      type: "billing.reconciled.unmapped_subscription",
+      source: "admin.reconcile",
+      severity: "warning",
+      payload: {
+        primary,
+        totalSubscriptions: snapshots.length,
+      },
+    });
+  }
 
   return {
     subscriptions: snapshots,

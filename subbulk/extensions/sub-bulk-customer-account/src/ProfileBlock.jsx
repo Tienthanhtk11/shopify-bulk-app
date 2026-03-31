@@ -36,6 +36,16 @@ function formatStatus(status) {
   }
 }
 
+function formatPaymentStatus(status) {
+  if (!status) return 'No payment status yet';
+
+  return status
+    .toLowerCase()
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
 function buildStats(contracts) {
   return contracts.reduce(
     (summary, contract) => {
@@ -63,6 +73,7 @@ function Extension() {
     contracts: [],
     busyContractId: '',
     busyIntent: '',
+    paymentMethodHelp: '',
   });
   const stats = buildStats(state.contracts);
 
@@ -99,6 +110,7 @@ function Extension() {
         contracts: [],
         busyContractId: '',
         busyIntent: '',
+        paymentMethodHelp: '',
       });
       return;
     }
@@ -120,6 +132,8 @@ function Extension() {
         contracts: Array.isArray(data.contracts) ? data.contracts : [],
         busyContractId: '',
         busyIntent: '',
+        paymentMethodHelp:
+          typeof data.paymentMethodHelp === 'string' ? data.paymentMethodHelp : '',
       });
     } catch (error) {
       setState({
@@ -132,6 +146,7 @@ function Extension() {
         contracts: [],
         busyContractId: '',
         busyIntent: '',
+        paymentMethodHelp: '',
       });
     }
   }
@@ -160,6 +175,8 @@ function Extension() {
         contracts: Array.isArray(data.contracts) ? data.contracts : [],
         busyContractId: '',
         busyIntent: '',
+        paymentMethodHelp:
+          typeof data.paymentMethodHelp === 'string' ? data.paymentMethodHelp : '',
       });
     } catch (error) {
       setState((current) => ({
@@ -195,6 +212,7 @@ function Extension() {
           Manage every plan from your profile with quick actions for pause,
           resume, and cancel.
         </s-text>
+        {state.paymentMethodHelp ? <s-text>{state.paymentMethodHelp}</s-text> : null}
       </s-stack>
 
       <s-grid gridTemplateColumns="repeat(4, minmax(0, 1fr))" gap="small">
@@ -295,6 +313,12 @@ function Extension() {
                 <s-stack direction="block" gap="none">
                   <s-text>Next billing: {formatDate(contract.nextBillingDate)}</s-text>
                   <s-text>Started: {formatDate(contract.createdAt)}</s-text>
+                  <s-text>
+                    Payment method: {contract.paymentMethodLabel || 'Not visible yet'}
+                  </s-text>
+                  <s-text>
+                    Last payment: {formatPaymentStatus(contract.lastPaymentStatus)}
+                  </s-text>
                 </s-stack>
 
                 <s-stack direction="inline" gap="small" justifyContent="end" alignItems="start">
