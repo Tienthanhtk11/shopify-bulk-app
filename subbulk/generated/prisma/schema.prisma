@@ -1,0 +1,214 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+// Note that some adapters may set a maximum length for the String type by default, please ensure your strings are long
+// enough when changing adapters.
+// See https://www.prisma.io/docs/orm/reference/prisma-schema-reference#string for more information
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Session {
+  id                  String    @id
+  shop                String
+  state               String
+  isOnline            Boolean   @default(false)
+  scope               String?
+  expires             DateTime?
+  accessToken         String
+  userId              BigInt?
+  firstName           String?
+  lastName            String?
+  email               String?
+  accountOwner        Boolean   @default(false)
+  locale              String?
+  collaborator        Boolean?  @default(false)
+  emailVerified       Boolean?  @default(false)
+  refreshToken        String?
+  refreshTokenExpires DateTime?
+}
+
+model Merchant {
+  id               String                        @id @default(cuid())
+  shopDomain       String                        @unique
+  shopGid          String?
+  shopName         String?
+  email            String?
+  countryCode      String?
+  currencyCode     String?
+  timezone         String?
+  status           String                        @default("active")
+  installedAt      DateTime                      @default(now())
+  uninstalledAt    DateTime?
+  lastSeenAt       DateTime                      @default(now())
+  createdAt        DateTime                      @default(now())
+  updatedAt        DateTime                      @updatedAt
+  plans            MerchantPlan[]
+  events           MerchantEvent[]
+  deletionRequests MerchantDataDeletionRequest[]
+}
+
+model MerchantPlan {
+  id                     String    @id @default(cuid())
+  merchantId             String
+  shopifySubscriptionGid String?
+  planKey                String
+  planName               String
+  billingModel           String    @default("MANAGED_PRICING")
+  billingInterval        String?
+  status                 String    @default("active")
+  isTest                 Boolean   @default(false)
+  activatedAt            DateTime?
+  currentPeriodEndAt     DateTime?
+  trialEndsAt            DateTime?
+  canceledAt             DateTime?
+  rawPayloadJson         String    @default("{}")
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+  merchant               Merchant  @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@index([merchantId])
+  @@index([merchantId, status])
+}
+
+model MerchantEvent {
+  id          String   @id @default(cuid())
+  merchantId  String
+  type        String
+  severity    String   @default("info")
+  source      String
+  payloadJson String   @default("{}")
+  createdAt   DateTime @default(now())
+  merchant    Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@index([merchantId])
+  @@index([merchantId, type])
+}
+
+model MerchantDataDeletionRequest {
+  id            String    @id @default(cuid())
+  merchantId    String
+  requestedBy   String
+  status        String    @default("pending")
+  scopeJson     String    @default("{}")
+  completedAt   DateTime?
+  failureReason String?
+  auditNotes    String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  merchant      Merchant  @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@index([merchantId])
+  @@index([merchantId, status])
+}
+
+model AdminPlanDefinition {
+  id                           String   @id @default(cuid())
+  planKey                      String   @unique
+  displayName                  String
+  monthlyPrice                 String
+  yearlyPrice                  String
+  tagline                      String
+  bestFor                      String
+  merchantFacingHighlightsJson String   @default("[]")
+  opsHighlightsJson            String   @default("[]")
+  isActive                     Boolean  @default(true)
+  isPublic                     Boolean  @default(true)
+  sortOrder                    Int      @default(0)
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
+}
+
+model InternalAdminAccount {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  displayName  String
+  passwordHash String
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+/// Một rule subscribe chung (kiểu Seal): một selling plan group trên Shopify gắn nhiều sản phẩm.
+model SubscriptionRule {
+  id                      String   @id @default(cuid())
+  shop                    String   @unique
+  /// Tên hiển thị (vd. Subscribe & save)
+  title                   String   @default("Subscribe & save")
+  internalName            String?
+  /// Nhãn trước dropdown tần suất (vd. Deliver every)
+  planSelectorLabel       String   @default("Deliver every")
+  discountType            String
+  discountValue           String
+  planIntervalsJson       String   @default("[]")
+  sellingPlanGroupGid     String?
+  defaultSellingPlanGid   String?
+  /// WIDGET_ENABLED = mọi sản phẩm trong WidgetEnabledProduct; EXPLICIT = explicitProductGidsJson
+  productScope            String   @default("WIDGET_ENABLED")
+  explicitProductGidsJson String   @default("[]")
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+}
+
+/// Gói subscribe gắn 1 product + selling plan group trên Shopify.
+model SubscriptionOffer {
+  id                    String   @id @default(cuid())
+  shop                  String
+  title                 String
+  productGid            String
+  sellingPlanGroupGid   String?
+  defaultSellingPlanGid String?
+  discountType          String
+  discountValue         String
+  /// JSON: [{ "interval": "WEEK"|"MONTH"|"DAY", "intervalCount": number, "label": string }]
+  planIntervalsJson     String   @default("[]")
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([shop])
+}
+
+/// Tuỳ biến copy/màu widget (đọc từ storefront qua metafield shop hoặc API — phase 1 lưu DB).
+model WidgetSettings {
+  id                               String   @id @default(cuid())
+  shop                             String   @unique
+  buyMoreHeading                   String   @default("Buy More, Save More")
+  purchaseOptionsLabel             String   @default("Purchase options")
+  primaryColorHex                  String   @default("#D73C35")
+  accentGreenHex                   String   @default("#2E7D32")
+  fontFamily                       String   @default("system-ui, -apple-system, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif")
+  borderRadiusPx                   Int      @default(6)
+  borderThicknessPx                Int      @default(1)
+  showSavingsBadge                 Boolean  @default(true)
+  showCompareAtPrice               Boolean  @default(true)
+  showSubscriptionDetails          Boolean  @default(true)
+  customCssEnabled                 Boolean  @default(false)
+  customCss                        String   @default("")
+  subscriptionFooter               String   @default("Powered by SubBulk")
+  freeShippingNote                 String   @default("Free Shipping on all orders over $99.99")
+  /// Mặc định khi tạo subscription offer: PERCENTAGE | FIXED
+  defaultSubscriptionDiscountType  String   @default("PERCENTAGE")
+  /// Chuỗi số (phần trăm hoặc số tiền tuỳ type)
+  defaultSubscriptionDiscountValue String   @default("10")
+  createdAt                        DateTime @default(now())
+  updatedAt                        DateTime @updatedAt
+}
+
+/// Sản phẩm được phép hiển thị widget (đồng bộ metafield app.subbulk_widget_enabled).
+model WidgetEnabledProduct {
+  id           String   @id @default(cuid())
+  shop         String
+  productGid   String
+  productTitle String?
+  createdAt    DateTime @default(now())
+
+  @@unique([shop, productGid])
+  @@index([shop])
+}

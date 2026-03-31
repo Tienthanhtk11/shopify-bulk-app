@@ -17,6 +17,7 @@ import {
 import { TitleBar } from "@shopify/app-bridge-react";
 import { useState } from "react";
 import { authenticate } from "../shopify.server";
+import { assertMerchantWriteAccess } from "../services/billing.server";
 import {
   deleteOffer,
   getOffer,
@@ -50,7 +51,12 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request, params }: ActionFunctionArgs) => {
-  const { session } = await authenticate.admin(request);
+  const { session, redirect } = await authenticate.admin(request);
+  await assertMerchantWriteAccess({
+    session,
+    redirect,
+    requiredFeature: "advancedOffers",
+  });
   const id = params.id!;
   const fd = await request.formData();
   const intent = String(fd.get("intent"));

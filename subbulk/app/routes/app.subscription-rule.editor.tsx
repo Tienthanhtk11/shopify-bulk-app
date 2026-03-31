@@ -29,6 +29,7 @@ import type { AdminApiContext } from "@shopify/shopify-app-remix/server";
 import prisma from "../db.server";
 import { fetchProductBulkPricingJson } from "../lib/shopify-metafields.server";
 import { authenticate } from "../shopify.server";
+import { assertMerchantWriteAccess } from "../services/billing.server";
 import { getOrCreateWidgetSettings } from "../models/widget-settings.server";
 import type { PlanIntervalConfig } from "../models/subscription-offer.server";
 import {
@@ -178,7 +179,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { admin, session } = await authenticate.admin(request);
+  const { admin, session, redirect } = await authenticate.admin(request);
+  await assertMerchantWriteAccess({
+    session,
+    redirect,
+    requiredFeature: "subscriptionRules",
+  });
   const fd = await request.formData();
   const intent = String(fd.get("intent") || "save");
   const existingRule = await getSubscriptionRule(session.shop);

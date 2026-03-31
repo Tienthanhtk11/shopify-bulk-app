@@ -3,6 +3,7 @@
 
 generator client {
   provider = "prisma-client-js"
+  output   = "../generated/prisma"
 }
 
 // Note that some adapters may set a maximum length for the String type by default, please ensure your strings are long
@@ -105,6 +106,34 @@ model MerchantDataDeletionRequest {
 
   @@index([merchantId])
   @@index([merchantId, status])
+}
+
+model AdminPlanDefinition {
+  id                         String   @id @default(cuid())
+  planKey                    String   @unique
+  displayName                String
+  monthlyPrice               String
+  yearlyPrice                String
+  tagline                    String
+  bestFor                    String
+  merchantFacingHighlightsJson String @default("[]")
+  opsHighlightsJson          String   @default("[]")
+  isActive                   Boolean  @default(true)
+  isPublic                   Boolean  @default(true)
+  sortOrder                  Int      @default(0)
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+}
+
+model InternalAdminAccount {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  displayName  String
+  passwordHash String
+  isActive     Boolean  @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }
 
 /// Một rule subscribe chung (kiểu Seal): một selling plan group trên Shopify gắn nhiều sản phẩm.

@@ -1,4 +1,6 @@
 import prisma from "../db.server";
+import { resolveEntitlements } from "../services/entitlements.server";
+import { listAdminPlanDefinitions } from "../services/admin-plan-catalog.server";
 
 type MerchantSessionLike = {
   shop: string;
@@ -9,6 +11,14 @@ type MerchantSessionLike = {
 
 function safeJson(value: unknown) {
   return JSON.stringify(value ?? {});
+}
+
+function parseJsonObject(value: string | null | undefined) {
+  try {
+    return value ? JSON.parse(value) : null;
+  } catch {
+    return null;
+  }
 }
 
 export async function getMerchantByShopDomain(shopDomain: string) {
@@ -123,6 +133,120 @@ export async function listMerchants() {
   }));
 }
 
+export async function listMerchantSubscriptionOverview() {
+  const merchants = await prisma.merchant.findMany({
+    orderBy: [{ updatedAt: "desc" }],
+    include: {
+      plans: {
+        orderBy: [{ createdAt: "desc" }],
+        take: 1,
+      },
+    },
+  });
+  const catalog = await listAdminPlanDefinitions();
+  const catalogMap = new Map(catalog.map((item) => [item.key, item]));
+
+  return merchants.map((merchant) => {
+    const latestPlan = merchant.plans[0] ?? null;
+    const entitlements = resolveEntitlements(latestPlan);
+    const planCatalog = catalogMap.get(entitlements.planKey) || null;
+    return {
+      merchantId: merchant.id,
+      shopDomain: merchant.shopDomain,
+      merchantStatus: merchant.status,
+      email: merchant.email,
+      latestPlan,
+      entitlements,
+      catalog: planCatalog,
+      latestPlanMeta: parseJsonObject(latestPlan?.rawPayloadJson),
+      isBlockedPaidMerchant:
+        entitlements.planKey !== "free" && !entitlements.hasActivePlanAccess,
+    };
+  });
+}
+
+export async function listMerchantAdminSummaries() {
+  const merchants = await prisma.merchant.findMany({
+    orderBy: [{ updatedAt: "desc" }],
+    include: {
+      plans: {
+        orderBy: [{ createdAt: "desc" }],
+        take: 12,
+      },
+      events: {
+        orderBy: [{ createdAt: "desc" }],
+        take: 20,
+      },
+    },
+  });
+
+  const catalog = await listAdminPlanDefinitions();
+  const catalogMap = new Map(catalog.map((item) => [item.key, item]));
+
+  return merchants.map((merchant) => {
+    const latestPlan = merchant.plans[0] ?? null;
+    const entitlements = resolveEntitlements(latestPlan);
+    const planCatalog = catalogMap.get(entitlements.planKey) || null;
+
+    return {
+      merchantId: merchant.id,
+      shopDomain: merchant.shopDomain,
+      merchantStatus: merchant.status,
+      email: merchant.email,
+      installedAt: merchant.installedAt,
+      uninstalledAt: merchant.uninstalledAt,
+      latestPlan,
+      entitlements,
+      catalog: planCatalog,
+      latestPlanMeta: parseJsonObject(latestPlan?.rawPayloadJson),
+      isBlockedPaidMerchant:
+        entitlements.planKey !== "free" && !entitlements.hasActivePlanAccess,
+      plans: merchant.plans,
+      events: merchant.events,
+    };
+  });
+}
+
+export async function createManualMerchant(input: {
+  actor: string;
+  shopDomain: string;
+  shopName?: string;
+  email?: string;
+  countryCode?: string;
+  currencyCode?: string;
+  timezone?: string;
+}) {
+  const merchant = await prisma.merchant.create({
+    data: {
+      shopDomain: input.shopDomain,
+      shopName: input.shopName || null,
+      email: input.email || null,
+      countryCode: input.countryCode || null,
+      currencyCode: input.currencyCode || null,
+      timezone: input.timezone || null,
+      status: "active",
+      installedAt: new Date(),
+      lastSeenAt: new Date(),
+    },
+  });
+
+  await prisma.merchantEvent.create({
+    data: {
+      merchantId: merchant.id,
+      type: "merchant.created.manual",
+      severity: "info",
+      source: "internal.portal",
+      payloadJson: safeJson({
+        actor: input.actor,
+        shopName: input.shopName || null,
+        email: input.email || null,
+      }),
+    },
+  });
+
+  return merchant;
+}
+
 export async function getMerchantDetailById(id: string) {
   return prisma.merchant.findUnique({
     where: { id },
@@ -132,6 +256,106 @@ export async function getMerchantDetailById(id: string) {
       deletionRequests: { orderBy: [{ createdAt: "desc" }] },
     },
   });
+}
+
+export async function updateMerchantStatusById(input: {
+  merchantId: string;
+  status: string;
+  actor: string;
+  note?: string;
+}) {
+  const merchant = await prisma.merchant.update({
+    where: { id: input.merchantId },
+    data: {
+      status: input.status,
+      uninstalledAt: input.status === "uninstalled" ? new Date() : null,
+      lastSeenAt: new Date(),
+    },
+  });
+
+  await prisma.merchantEvent.create({
+    data: {
+      merchantId: merchant.id,
+      type: "merchant.status.updated",
+      severity: input.status === "disabled" ? "warning" : "info",
+      source: "internal.portal",
+      payloadJson: safeJson({
+        actor: input.actor,
+        status: input.status,
+        note: input.note || null,
+      }),
+    },
+  });
+
+  return merchant;
+}
+
+export async function createMerchantInternalNote(input: {
+  merchantId: string;
+  actor: string;
+  note: string;
+  severity?: string;
+}) {
+  return prisma.merchantEvent.create({
+    data: {
+      merchantId: input.merchantId,
+      type: "merchant.internal_note",
+      severity: input.severity || "info",
+      source: "internal.portal",
+      payloadJson: safeJson({
+        actor: input.actor,
+        note: input.note,
+      }),
+    },
+  });
+}
+
+export async function createAdminMerchantPlanSnapshot(input: {
+  merchantId: string;
+  actor: string;
+  planKey: string;
+  planName: string;
+  status: string;
+  billingInterval?: string | null;
+  isTest?: boolean;
+  note?: string;
+}) {
+  const plan = await prisma.merchantPlan.create({
+    data: {
+      merchantId: input.merchantId,
+      planKey: input.planKey,
+      planName: input.planName,
+      status: input.status,
+      billingInterval: input.billingInterval ?? null,
+      isTest: input.isTest ?? false,
+      activatedAt: input.status === "active" || input.status === "trialing" ? new Date() : null,
+      rawPayloadJson: safeJson({
+        source: "internal.portal",
+        actor: input.actor,
+        note: input.note || null,
+      }),
+    },
+  });
+
+  await prisma.merchantEvent.create({
+    data: {
+      merchantId: input.merchantId,
+      type: "merchant.plan.assigned",
+      severity: "info",
+      source: "internal.portal",
+      payloadJson: safeJson({
+        actor: input.actor,
+        planKey: input.planKey,
+        planName: input.planName,
+        status: input.status,
+        billingInterval: input.billingInterval ?? null,
+        isTest: input.isTest ?? false,
+        note: input.note || null,
+      }),
+    },
+  });
+
+  return plan;
 }
 
 export async function getLatestDeletionRequest(shopDomain: string) {

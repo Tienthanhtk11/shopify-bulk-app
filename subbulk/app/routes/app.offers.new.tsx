@@ -23,6 +23,7 @@ import { useState, useCallback } from "react";
 import { authenticate } from "../shopify.server";
 import { getOrCreateWidgetSettings } from "../models/widget-settings.server";
 import { createOfferWithSellingPlans } from "../models/subscription-offer.server";
+import { assertMerchantWriteAccess } from "../services/billing.server";
 
 const DEFAULT_INTERVALS = [
   { interval: "WEEK" as const, intervalCount: 1, label: "1 week" },
@@ -42,7 +43,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { admin, session } = await authenticate.admin(request);
+  const { admin, session, redirect } = await authenticate.admin(request);
+  await assertMerchantWriteAccess({
+    session,
+    redirect,
+    requiredFeature: "advancedOffers",
+  });
   const fd = await request.formData();
   const title = String(fd.get("title") || "").trim();
   const productGid = String(fd.get("productGid") || "").trim();

@@ -123,3 +123,183 @@
        - `HEAD /auth/login` -> `200`
        - `POST /jobs/deletion-requests` -> `200`
        - runner log shows `processed: 0` when queue is empty
+18. Entitlement status hardening:
+   * updated `app/services/entitlements.server.ts` so non-free plans only unlock paid features when billing status is `active` or `trialing`
+   * inactive paid statuses such as `frozen` and `canceled` now fall back to the Free feature surface instead of retaining paid access
+   * updated `app/routes/app.billing.tsx` to show a billing-resolution message when the latest paid plan is not currently active
+   * added test coverage in `app/services/partner-billing.test.ts` for Partner Dashboard plan mapping and inactive-plan entitlement locking
+19. Validation for entitlement status hardening:
+   * `npm test` passed (13 tests)
+   * `npm run build` passed
+   * `docker compose config` passed
+   * live `deletion_job_runner` continued returning `200` with empty queue after the app-side changes
+20. Billing reconciliation and action-level write gating:
+   * added `app/services/merchant-billing.server.ts` to reconcile `currentAppInstallation.activeSubscriptions` into the internal merchant billing snapshot on demand
+   * added `app/routes/app.welcome.tsx` as a managed-pricing return/reconciliation destination that refreshes billing state before merchants continue into the app
+   * extended `app/services/billing.server.ts` with action-level write checks so writes can be blocked even when a user reaches a page but billing is inactive
+   * wired action-level guards into write actions for offers, subscription rules, widget products, and settings
+   * updated `app/routes/app.billing.tsx` to surface a `writeBlocked` reason when a merchant is redirected there from a blocked write action
+   * updated production `.env` with exact current plan names (`Free`, `Growth`, `Scale`) while leaving GID mappings blank until valid live identifiers are available from real billing data or Partner Dashboard export
+21. Validation for reconciliation + write-gate round:
+   * `npm test` passed (13 tests)
+   * `npm run build` passed
+   * pre-existing CSS warning remains unchanged during build
+   * exact Partner Dashboard subscription GIDs are still unavailable from runtime data because the current production DB has no `MerchantPlan` snapshots and the stored offline Shopify token returned an invalid-token Admin API response
+22. Standalone internal admin portal:
+   * added a separate cookie-based internal admin auth flow in `app/services/internal-admin-portal.server.ts`
+   * added standalone portal routes:
+     - `app/routes/admin.login.tsx`
+     - `app/routes/admin.tsx`
+     - `app/routes/admin.merchants.tsx`
+     - `app/routes/admin.merchants.$merchantId.tsx`
+     - `app/routes/admin.logout.tsx`
+   * portal now runs independently from Shopify embedded auth and is intended for `admin-app.thanhpt.online`
+   * added root redirect so requests hitting `admin-app.thanhpt.online/` go directly to `/admin/login`
+   * added Caddy host mapping for `admin-app.thanhpt.online`
+   * added env vars:
+     - `INTERNAL_ADMIN_SESSION_SECRET`
+     - `INTERNAL_ADMIN_PORTAL_ACCOUNTS`
+   * provisioned a temporary internal admin account in production env so the portal can be used immediately after DNS is added
+23. Validation for standalone admin portal round:
+   * `npm test` passed (13 tests)
+   * `npm run build` passed
+   * pre-existing CSS warning remains unchanged during build
+24. Merchant management and merchant package operations in the standalone portal:
+   * added `app/services/admin-plan-catalog.shared.ts` with a Seal-inspired `Free` / `Growth` / `Scale` package catalog for internal ops
+   * added `listMerchantSubscriptionOverview()` in `app/models/merchant.server.ts` so the internal portal can see each merchant's latest plan, entitlement state, and blocked-paid risk in one query
+   * added internal portal management helpers in `app/models/merchant.server.ts`:
+     - `updateMerchantStatusById()`
+     - `createAdminMerchantPlanSnapshot()`
+     - `createMerchantInternalNote()`
+   * expanded `app/routes/admin.merchants.tsx` with merchant search, status filter, package filter, and blocked-paid visibility
+   * added `app/routes/admin.subscriptions.tsx` as the internal package-management screen showing the plan catalog plus current merchant package assignments
+   * expanded `app/routes/admin.merchants.$merchantId.tsx` with operational controls to:
+     - update merchant status
+     - assign a merchant package snapshot
+     - add internal notes
+     - inspect enabled entitlement features alongside plan history and lifecycle events
+   * updated `app/routes/admin.tsx` navigation to expose the new `Packages` area inside the standalone portal
+25. Validation for merchant management and package-ops round:
+   * `npm test` passed (13 tests)
+   * `npm run build` passed
+   * pre-existing CSS warning remains unchanged during build
+26. True package management for internal admin portal:
+   * added Prisma model `AdminPlanDefinition` plus migration `20260330183000_admin_plan_definitions` so package definitions are now stored in the database
+   * seeded default `free`, `growth`, and `scale` package definitions from the existing commercial model
+   * added `app/services/admin-plan-catalog.server.ts` to load, ensure, and update package definitions from Prisma instead of relying only on hardcoded catalog data
+   * updated `app/routes/admin.subscriptions.tsx` so the `Packages` screen now supports editing:
+     - display name
+     - monthly and yearly pricing
+     - tagline
+     - best-for description
+     - merchant-facing highlights
+     - ops highlights
+     - active/public flags
+     - sort order
+   * updated `app/models/merchant.server.ts` and `app/routes/admin.merchants.$merchantId.tsx` so merchant package assignment now uses the persisted package definitions when internal admins assign packages to merchants
+27. Validation for true package management round:
+   * `npx prisma generate` passed
+   * `npm test` passed (13 tests)
+   * `npm run build` passed
+   * pre-existing CSS warning remains unchanged during build
+28. Merchant list detail popup and timeline view:
+   * replaced the brittle `View detail` navigation in `app/routes/admin.merchants.tsx` with an inline popup opened directly from the merchant list
+   * added `listMerchantAdminSummaries()` in `app/models/merchant.server.ts` so each merchant row can bring install lifecycle, package history, and event timeline into the popup
+   * popup now shows:
+     - install / uninstall lifecycle
+     - package registration and change history inferred from `MerchantPlan` snapshots
+     - lifecycle event feed from `MerchantEvent`
+   * this keeps internal operators on the main merchant list while still exposing the key operational history quickly
+29. Validation for merchant popup round:
+   * `npm test` passed (13 tests)
+   * `npm run build` passed
+   * pre-existing CSS warning remains unchanged during build
+30. Internal admin accounts moved into the database:
+   * added Prisma model `InternalAdminAccount` and migration `20260330193000_internal_admin_accounts`
+   * added `app/services/internal-admin-accounts.server.ts` for bootstrap, hashing, login verification, listing, create, update, and delete
+   * updated `app/services/internal-admin-portal.server.ts` so portal login/session now validates against DB-backed admin accounts instead of reading credentials directly from env on every login
+   * added `app/routes/admin.admins.tsx` and linked it from `app/routes/admin.tsx` so the standalone portal now supports admin list + add/edit/delete flows
+31. Merchant-facing default navigation and billing plan selection improvements:
+   * changed embedded app home flow so `/app` now redirects to Analytics via `app/routes/app._index.tsx`
+   * updated `app/routes/app.tsx` so the primary home nav entry now opens Analytics first
+   * expanded `app/routes/app.billing.tsx` to show the merchant's current plan plus visible package cards from the DB-backed package catalog
+   * added `app/services/managed-pricing.server.ts` with `SHOPIFY_MANAGED_PRICING_APP_HANDLE` support so Billing can link merchants to Shopify's hosted pricing-plan page for plan changes/upgrades
+32. Prisma client generation hardening for this workspace:
+   * moved Prisma client generation output to `generated/prisma` because the old `node_modules/.prisma` target was root-owned and blocked `prisma generate`
+   * updated local Prisma imports to use the generated repo path and server-side `createRequire` runtime loading in `app/db.server.ts`
+33. Validation for admin-account + billing-entry round:
+   * `npx prisma generate` passed after moving client output to `generated/prisma`
+   * `npm test` passed (13 tests)
+   * `npm run build` passed
+   * pre-existing build warnings remain unchanged:
+     - `NODE_ENV=production` in `.env`
+     - CSS minify warning around `@media (--p-breakpoints-md-up) and print`
+34. Production rollout for DB-backed admin accounts and merchant entry/billing updates:
+   * updated production `.env` to set `SHOPIFY_MANAGED_PRICING_APP_HANDLE=subscription-bulk-app`
+   * cleared `INTERNAL_ADMIN_PORTAL_ACCOUNTS` in production env after seeding the first admin into DB
+   * removed the exposed admin password from `/home/krizpham/shopify-bulk-app/report.md`
+35. Merchant console action hardening:
+    * `app/routes/admin.merchants.tsx` now gives the visible merchant actions real behavior instead of dead UI:
+       - `Export XML` posts to a server action and returns an XML export attachment
+       - `New Merchant` opens a live intake form that creates a merchant record in Prisma and redirects into the detail workspace
+       - `Control` is now an explicit working link/button per row to the merchant detail route
+    * `app/models/merchant.server.ts` now includes `createManualMerchant()` for operator-created merchant records and emits a `merchant.created.manual` event
+    * `app/routes/admin.merchants.$merchantId.tsx` was hardened so header actions are real:
+       - `Audit Log` jumps to the event section
+       - `Save Snapshot` submits the package snapshot form
+    * merchant detail workspace now fills additional real merchant profile data: store name, email, country, currency, timezone, install time, and last-seen signal
+   * redeployed `shopify_app` and `deletion_job_runner` from `/home/krizpham/thanhpt-stack`
+   * fixed runtime Prisma client resolution in `app/db.server.ts` so the built server bundle can load `generated/prisma` correctly inside the container
+35. Production verification after redeploy:
+   * root app entry now returns `302 Location: /app/analytics?...` for Shopify shop-entry traffic
+   * standalone portal login works against the DB-backed admin account and `/admin/admins` renders successfully
+   * live container env confirms `SHOPIFY_MANAGED_PRICING_APP_HANDLE=subscription-bulk-app` and no plain-text bootstrap admin credentials remain in env
+36. Internal admin portal visual redesign:
+   * redesigned `app/routes/admin.tsx` into a darker operations-console shell with active navigation, stronger typography, and system-status cards
+   * redesigned `app/routes/admin.login.tsx` into a split modern login screen with a technology-oriented visual style
+   * restyled `app/routes/admin.merchants.tsx`, `app/routes/admin.subscriptions.tsx`, `app/routes/admin.admins.tsx`, and `app/routes/admin.merchants.$merchantId.tsx` into the same dark glassmorphism UI language
+37. Merchant navigation and production deploy stabilization:
+   * the merchant list no longer uses the earlier inline popup flow as the active UX; `app/routes/admin.merchants.tsx` now uses proper route navigation again via `/admin/merchants/:merchantId`
+   * merchant row actions were normalized so the row CTA now reads `Detail` instead of `Control`
+   * merchant domain text in the table is now a working link to the merchant detail screen
+   * `app/routes/admin.merchants.tsx` now renders nested merchant detail routes through `Outlet` when `merchantId` is present
+   * production initially looked stale because source edits had not been reflected in the live Docker image; the correct deploy path remains rebuilding `shopify_app` from `/home/krizpham/thanhpt-stack`
+38. Merchant detail route crash fix:
+   * after the deploy, client-side navigation from `/admin/merchants` into merchant detail hit a production React minified error #300
+   * root cause was hook order instability in `app/routes/admin.merchants.tsx` caused by returning `<Outlet />` before all hooks had executed
+   * fixed by computing `filteredMerchants` before the conditional nested-route return so hook order is stable between list and detail transitions
+   * rebuilt and redeployed production successfully after this fix
+39. Package management UX refinement:
+   * `app/routes/admin.subscriptions.tsx` now uses transient toast notifications instead of a persistent status banner
+   * save buttons were restyled to look like explicit actions and now show a `Saving...` state while the form is submitting
+   * package presentation was normalized to the three canonical business packages visible to operators: `Free`, `Premium`, and `Ultra`
+   * internal storage keys still map to `free`, `growth`, and `scale`, with UI naming resolved through `getCanonicalPlanName()`
+   * short package description/tagline editing was changed from single-line input to multiline textarea so longer copy is fully visible and editable
+   * these package-screen changes were built and redeployed to production successfully
+40. Toast-only admin action feedback and latest production status:
+   * `app/routes/admin.admins.tsx` now uses toast-only feedback for create, update, and delete admin actions instead of a fixed banner
+   * successful admin actions now reset the exact submitted form after completion
+   * `app/routes/admin.merchants.$merchantId.tsx` now uses toast-only feedback for adding internal notes and resets the note form on success
+   * latest local validation passed with `npm run build`
+   * latest production redeploy was completed successfully from `/home/krizpham/thanhpt-stack` and `shopify_app` is up with the new admin/admin-note toast-reset behavior live
+   * current known build warnings remain unchanged and non-blocking:
+     - `.env` contains `NODE_ENV=production`
+     - CSS minify warning around `@media (--p-breakpoints-md-up) and print`
+   * deployed the refreshed admin portal UI to production and confirmed the app container restarted cleanly
+37. Stitch-based Merchant Packages redesign:
+    * downloaded the exported Stitch HTML and screenshot for the `Merchant Packages` screen into `stitch-export/merchant-packages/`
+    * refactored `app/routes/admin.tsx` so the standalone admin shell now follows the Stitch layout more closely with:
+       - compact left rail navigation
+       - fixed top operations bar
+       - Inter / Manrope / Space Grotesk typography
+       - Material Symbols icon treatment
+    * refactored `app/routes/admin.subscriptions.tsx` so the `Packages` screen now mirrors the Stitch composition more closely with:
+       - three KPI tiles for Free / Growth / Scale merchant counts
+       - three package cards styled like the Stitch design while preserving live save actions
+       - an `Assigned Merchants` data table styled to match the exported screen language
+    * validation results for the Stitch redesign round:
+       - `npm run build` passed
+       - no TypeScript errors were reported in the edited files
+       - pre-existing build warnings remain unchanged:
+          - `NODE_ENV=production` in `.env`
+          - CSS minify warning around `@media (--p-breakpoints-md-up) and print`

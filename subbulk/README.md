@@ -138,8 +138,12 @@ Required env vars for merchant billing and deletion jobs:
 - `PARTNER_PLAN_FREE_GIDS`, `PARTNER_PLAN_GROWTH_GIDS`, `PARTNER_PLAN_SCALE_GIDS`: optional comma-separated subscription GIDs for exact plan matching.
 - `JOB_RUNNER_SECRET`: shared secret used by the deletion queue route at `/jobs/deletion-requests`.
 - `DELETION_JOB_INTERVAL_SECONDS`: polling interval for the external deletion job runner service in Docker Compose.
+- `INTERNAL_ADMIN_SESSION_SECRET`: cookie-session secret for the standalone internal admin portal.
+- `INTERNAL_ADMIN_PORTAL_ACCOUNTS`: comma-separated internal admin accounts in the format `email:password:display name`.
 
 The `deletion_job_runner` service calls `POST http://shopify_app:3000/jobs/deletion-requests` on an interval with the `x-job-secret` header so deletion requests are processed without manual intervention.
+
+The internal portal is served on `admin-app.thanhpt.online` and uses its own cookie-based login flow at `/admin/login` instead of Shopify embedded authentication.
 
 ### Hosting on Vercel
 

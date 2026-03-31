@@ -37,13 +37,13 @@ export default function App() {
   return (
     <AppProvider isEmbeddedApp apiKey={apiKey}>
       <NavMenu>
-        <Link to="/app/subscriptions" rel="home">
-          Subscriptions
+        <Link to="/app/analytics" rel="home">
+          Analytics
         </Link>
         <Link to="/app/billing">Billing</Link>
+        <Link to="/app/subscriptions">Subscriptions</Link>
         <Link to="/app/subscription-rule">Subscription rule</Link>
         <Link to="/app/settings">Settings</Link>
-        <Link to="/app/analytics">Analytics</Link>
         <Link to="/app/privacy">Privacy</Link>
         {isInternalAdmin ? <Link to="/app/merchants">Merchants</Link> : null}
       </NavMenu>

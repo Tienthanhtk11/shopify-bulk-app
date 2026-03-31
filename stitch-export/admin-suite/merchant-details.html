@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Control Grid | Merchant Detail Deep Dive</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&amp;family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-panel {
+            background: rgba(23, 31, 51, 0.4);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+        .glow-cyan {
+            box-shadow: 0 0 15px rgba(60, 243, 255, 0.1);
+        }
+        .striped-bg {
+            background: repeating-linear-gradient(
+                45deg,
+                #2d3449,
+                #2d3449 10px,
+                #222a3d 10px,
+                #222a3d 20px
+            );
+        }
+    </style>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "surface-container": "#171f33",
+                        "surface-tint": "#00dbe7",
+                        "secondary-fixed": "#d9e2ff",
+                        "tertiary-fixed-dim": "#5adace",
+                        "inverse-surface": "#dae2fd",
+                        "surface-dim": "#0b1326",
+                        "on-secondary-fixed-variant": "#00429a",
+                        "surface-container-high": "#222a3d",
+                        "surface-container-highest": "#2d3449",
+                        "inverse-primary": "#00696f",
+                        "on-error": "#690005",
+                        "on-tertiary-fixed": "#00201d",
+                        "inverse-on-surface": "#283044",
+                        "outline-variant": "#3c494e",
+                        "secondary": "#afc6ff",
+                        "secondary-container": "#548dff",
+                        "surface-container-low": "#131b2e",
+                        "surface-bright": "#31394d",
+                        "on-primary": "#00363a",
+                        "primary-fixed-dim": "#00dbe7",
+                        "primary": "#3cf3ff",
+                        "primary-fixed": "#74f5ff",
+                        "surface-variant": "#2d3449",
+                        "on-surface-variant": "#bbc9cf",
+                        "on-primary-container": "#00585d",
+                        "on-surface": "#dae2fd",
+                        "on-secondary": "#002d6d",
+                        "on-tertiary": "#003733",
+                        "on-primary-fixed": "#002022",
+                        "background": "#0b1326",
+                        "on-primary-fixed-variant": "#004f54",
+                        "error-container": "#93000a",
+                        "surface": "#0b1326",
+                        "on-error-container": "#ffdad6",
+                        "secondary-fixed-dim": "#afc6ff",
+                        "on-tertiary-fixed-variant": "#00504a",
+                        "on-background": "#dae2fd",
+                        "tertiary-fixed": "#79f7ea",
+                        "on-secondary-container": "#002760",
+                        "on-tertiary-container": "#005953",
+                        "primary-container": "#00d6e1",
+                        "outline": "#859399",
+                        "tertiary-container": "#53d4c8",
+                        "surface-container-lowest": "#060e20",
+                        "tertiary": "#73f1e4",
+                        "error": "#ffb4ab",
+                        "on-secondary-fixed": "#001944"
+                    },
+                    fontFamily: {
+                        "headline": ["Manrope"],
+                        "body": ["Inter"],
+                        "label": ["Space Grotesk"]
+                    },
+                    borderRadius: {"DEFAULT": "0.125rem", "lg": "0.25rem", "xl": "0.5rem", "full": "0.75rem"},
+                },
+            },
+        }
+    </script>
+</head>
+<body class="bg-background text-on-surface font-body selection:bg-primary selection:text-on-primary">
+<!-- SideNavBar -->
+<aside class="h-screen w-64 fixed left-0 top-0 overflow-y-auto flex flex-col border-r border-[#3c494e]/15 bg-[#131b2e] dark:bg-[#131b2e] z-50">
+<div class="p-6 flex flex-col gap-1">
+<span class="text-xl font-bold tracking-tight text-[#dae2fd] dark:text-[#dae2fd] font-headline">Control Grid</span>
+<span class="font-label text-[10px] uppercase tracking-wider text-primary">SubBulk Internal</span>
+</div>
+<nav class="flex-1 mt-4">
+<a class="flex items-center gap-3 px-4 py-3 text-[#3cf3ff] bg-[#171f33] border-r-2 border-[#3cf3ff] shadow-[0_0_15px_rgba(60,243,255,0.1)] transition-all duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="storefront">storefront</span>
+<span class="font-body text-sm font-medium">Merchants</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-[#dae2fd]/60 hover:text-[#dae2fd] hover:bg-[#171f33]/50 transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="inventory_2">inventory_2</span>
+<span class="font-body text-sm font-medium">Packages</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-[#dae2fd]/60 hover:text-[#dae2fd] hover:bg-[#171f33]/50 transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="admin_panel_settings">admin_panel_settings</span>
+<span class="font-body text-sm font-medium">Admins</span>
+</a>
+</nav>
+<div class="mt-auto p-4 border-t border-[#3c494e]/15">
+<div class="flex items-center gap-3 p-3 rounded-lg bg-surface-container-low mb-4">
+<img alt="Admin User Profile" class="w-8 h-8 rounded-full border border-primary/20" data-alt="close up of a professional user avatar with a clean tech aesthetic" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD8lvjtuV-r-R5FDMEgJqudIkbYF2tWTuRgzxY0gf9JTllAm5ICqqfRuvqkWBLZL0Hh4Zi63Stn7FgUimgSdGlpHeOpThbfs-pFRFBIoRO80fDqxeSpkapRf0TSNGTcvl9NC0ukUOYJYVD1sV8tzvgSl_RuxjxPdCZQtATjHY7e43p0hU0A7pGhtepD9LYiWwTD2fB6SAxU1STeQ7pDe1y9FXbW68R-d0TbF0Z-mZVzgPChdKHrBvdD0UuELOIIh2pA5Gy_cmvFoJN6"/>
+<div class="flex flex-col">
+<span class="text-xs font-bold font-headline">Admin User</span>
+<span class="text-[10px] font-label text-primary uppercase">Live Production</span>
+</div>
+</div>
+<a class="flex items-center gap-3 px-4 py-3 text-[#dae2fd]/60 hover:text-[#dae2fd] hover:bg-[#171f33]/50 transition-all rounded-lg" href="#">
+<span class="material-symbols-outlined" data-icon="logout">logout</span>
+<span class="font-body text-sm font-medium">Logout</span>
+</a>
+</div>
+</aside>
+<!-- TopAppBar -->
+<header class="fixed top-0 right-0 left-64 h-16 z-40 flex justify-between items-center px-8 w-full bg-[#0b1326]/80 backdrop-blur-md border-b border-[#3c494e]/15">
+<div class="flex items-center gap-4">
+<div class="flex items-center gap-2 px-3 py-1 bg-surface-container-lowest rounded border border-outline-variant/10">
+<span class="material-symbols-outlined text-xs text-primary" data-icon="terminal">terminal</span>
+<span class="font-label text-[10px] uppercase tracking-tighter text-on-surface-variant">SYS_LINK: ESTABLISHED</span>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<div class="relative group">
+<span class="material-symbols-outlined text-[#dae2fd]/70 hover:text-[#3cf3ff] cursor-pointer transition-colors" data-icon="notifications">notifications</span>
+<div class="absolute -top-1 -right-1 w-2 h-2 bg-primary rounded-full animate-pulse"></div>
+</div>
+<span class="material-symbols-outlined text-[#dae2fd]/70 hover:text-[#3cf3ff] cursor-pointer transition-colors" data-icon="settings">settings</span>
+<div class="h-8 w-[1px] bg-outline-variant/20"></div>
+<div class="flex items-center gap-3">
+<span class="font-label text-xs text-primary">MS_LATENCY: 14ms</span>
+</div>
+</div>
+</header>
+<!-- Main Content -->
+<main class="ml-64 pt-24 pb-12 px-8 min-h-screen bg-surface-container-lowest">
+<!-- Merchant Header Detail -->
+<section class="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6 border-b border-outline-variant/10 pb-10">
+<div class="flex items-center gap-6">
+<div class="w-16 h-16 bg-surface-container flex items-center justify-center rounded-xl border border-primary/20 glow-cyan">
+<span class="material-symbols-outlined text-3xl text-primary" data-icon="storefront" style="font-variation-settings: 'FILL' 1;">storefront</span>
+</div>
+<div>
+<h1 class="text-3xl font-extrabold font-headline tracking-tight text-on-surface mb-1">blue-bottle-coffee.myshopify.com</h1>
+<div class="flex items-center gap-3">
+<span class="px-2 py-0.5 bg-tertiary-container/20 text-tertiary font-label text-[10px] font-bold tracking-widest uppercase rounded">ACTIVE</span>
+<span class="px-2 py-0.5 bg-secondary-container/20 text-secondary font-label text-[10px] font-bold tracking-widest uppercase rounded">Plan: SCALE</span>
+<span class="text-on-surface-variant font-label text-[10px] tracking-tight">ID: SHOPIFY_88291029</span>
+</div>
+</div>
+</div>
+<div class="flex gap-3">
+<button class="flex items-center gap-2 px-5 py-2.5 bg-surface-container border border-outline-variant/30 text-on-surface text-xs font-bold uppercase tracking-wider font-label hover:bg-surface-container-high transition-all">
+<span class="material-symbols-outlined text-sm" data-icon="history">history</span>
+                    Audit Log
+                </button>
+<button class="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-br from-primary to-primary-container text-on-primary text-xs font-bold uppercase tracking-wider font-label hover:shadow-[0_0_20px_rgba(60,243,255,0.3)] transition-all">
+<span class="material-symbols-outlined text-sm" data-icon="save">save</span>
+                    Save Snapshot
+                </button>
+</div>
+</section>
+<!-- Asymmetric Workspace Grid -->
+<div class="grid grid-cols-12 gap-8">
+<!-- LEFT COLUMN (Read-Only & Operational) -->
+<div class="col-span-12 lg:col-span-8 flex flex-col gap-8">
+<!-- Package Management & Operational Controls -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+<!-- Operational Controls -->
+<div class="glass-panel p-6 rounded-lg border border-outline-variant/10">
+<div class="flex items-center gap-2 mb-6">
+<span class="material-symbols-outlined text-primary text-lg" data-icon="tune">tune</span>
+<h2 class="text-sm font-bold font-headline uppercase tracking-widest text-on-surface">Operational Controls</h2>
+</div>
+<div class="space-y-4">
+<div>
+<label class="block font-label text-[10px] uppercase text-on-surface-variant mb-2">Merchant Status</label>
+<select class="w-full bg-surface-container-highest border-none text-on-surface text-sm font-body py-2.5 px-3 focus:ring-1 focus:ring-primary">
+<option>ACTIVE</option>
+<option>PAUSED</option>
+<option>RESTRICTED</option>
+<option>TERMINATED</option>
+</select>
+</div>
+<div>
+<label class="block font-label text-[10px] uppercase text-on-surface-variant mb-2">Administrative Notes</label>
+<textarea class="w-full bg-surface-container-highest border-none text-on-surface text-sm font-body p-3 focus:ring-1 focus:ring-primary" placeholder="Enter status justification..." rows="3"></textarea>
+</div>
+<button class="w-full py-2.5 border border-primary text-primary font-label text-xs font-bold uppercase tracking-widest hover:bg-primary/5 transition-all">
+                                Update Status
+                            </button>
+</div>
+</div>
+<!-- Package Management -->
+<div class="glass-panel p-6 rounded-lg border border-outline-variant/10">
+<div class="flex items-center gap-2 mb-6">
+<span class="material-symbols-outlined text-primary text-lg" data-icon="inventory">inventory</span>
+<h2 class="text-sm font-bold font-headline uppercase tracking-widest text-on-surface">Package Data</h2>
+</div>
+<div class="space-y-4">
+<div class="flex justify-between items-center py-2 border-b border-outline-variant/5">
+<span class="font-label text-[10px] uppercase text-on-surface-variant">Billing Status</span>
+<span class="font-label text-xs text-tertiary">CURRENT</span>
+</div>
+<div class="flex justify-between items-center py-2 border-b border-outline-variant/5">
+<span class="font-label text-[10px] uppercase text-on-surface-variant">Package Tier</span>
+<select class="bg-transparent border-none text-on-surface text-xs font-label p-0 focus:ring-0 text-right cursor-pointer">
+<option>SCALE</option>
+<option>GROWTH</option>
+<option>ESSENTIAL</option>
+</select>
+</div>
+<div class="flex justify-between items-center py-2 border-b border-outline-variant/5">
+<span class="font-label text-[10px] uppercase text-on-surface-variant">Interval</span>
+<span class="font-label text-xs text-on-surface">ANNUAL</span>
+</div>
+<div class="flex items-center justify-between pt-2">
+<span class="font-label text-[10px] uppercase text-on-surface-variant">Test Subscription</span>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-surface-container-highest peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+</label>
+</div>
+<div class="striped-bg p-3 rounded mt-2 border border-outline-variant/10">
+<span class="font-label text-[10px] uppercase text-on-surface font-bold">MODE: SIMULATION ENABLED</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Feature Flags Grid -->
+<div class="surface-container rounded-lg p-8 border border-outline-variant/10">
+<div class="flex items-center justify-between mb-8">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-lg" data-icon="flag">flag</span>
+<h2 class="text-sm font-bold font-headline uppercase tracking-widest text-on-surface">Active Feature Flags</h2>
+</div>
+<span class="font-label text-[10px] text-on-surface-variant">TOTAL ENABLED: 04</span>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<!-- Flag Item -->
+<div class="flex items-center justify-between p-4 bg-surface-container-low border border-outline-variant/10 rounded-lg hover:border-primary/20 transition-all">
+<div class="flex flex-col">
+<span class="font-label text-xs font-bold text-on-surface">BETA_ADV_ANALYTICS</span>
+<span class="text-[10px] text-on-surface-variant">v2.4.0 Engine</span>
+</div>
+<span class="material-symbols-outlined text-tertiary" data-icon="toggle_on" style="font-variation-settings: 'FILL' 1;">toggle_on</span>
+</div>
+<!-- Flag Item -->
+<div class="flex items-center justify-between p-4 bg-surface-container-low border border-outline-variant/10 rounded-lg hover:border-primary/20 transition-all">
+<div class="flex flex-col">
+<span class="font-label text-xs font-bold text-on-surface">MULTI_CURRENCY_V2</span>
+<span class="text-[10px] text-on-surface-variant">Legacy Fallback Enabled</span>
+</div>
+<span class="material-symbols-outlined text-tertiary" data-icon="toggle_on" style="font-variation-settings: 'FILL' 1;">toggle_on</span>
+</div>
+<!-- Flag Item -->
+<div class="flex items-center justify-between p-4 bg-surface-container-low border border-outline-variant/10 rounded-lg opacity-50">
+<div class="flex flex-col">
+<span class="font-label text-xs font-bold text-on-surface">HEADLESS_SYNC</span>
+<span class="text-[10px] text-on-surface-variant">Requires Enterprise API</span>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="toggle_off">toggle_off</span>
+</div>
+<!-- Flag Item -->
+<div class="flex items-center justify-between p-4 bg-surface-container-low border border-outline-variant/10 rounded-lg hover:border-primary/20 transition-all">
+<div class="flex flex-col">
+<span class="font-label text-xs font-bold text-on-surface">AI_SMART_BILLING</span>
+<span class="text-[10px] text-on-surface-variant">LLM Instance #2</span>
+</div>
+<span class="material-symbols-outlined text-tertiary" data-icon="toggle_on" style="font-variation-settings: 'FILL' 1;">toggle_on</span>
+</div>
+</div>
+</div>
+<!-- Internal Notes -->
+<div class="surface-container rounded-lg p-8 border border-outline-variant/10">
+<div class="flex items-center gap-2 mb-8">
+<span class="material-symbols-outlined text-primary text-lg" data-icon="sticky_note_2">sticky_note_2</span>
+<h2 class="text-sm font-bold font-headline uppercase tracking-widest text-on-surface">Internal Staff Notes</h2>
+</div>
+<div class="space-y-4">
+<div class="p-4 bg-surface-container-high border-l-4 border-error-container rounded flex justify-between items-start">
+<div>
+<p class="text-xs font-body text-on-surface mb-2 leading-relaxed">Merchant has high churn probability due to legacy connector issues. Recommended manual outreach before next billing cycle.</p>
+<div class="flex items-center gap-3">
+<span class="font-label text-[9px] uppercase tracking-widest text-on-surface-variant">Auth: J. DOE</span>
+<span class="font-label text-[9px] uppercase tracking-widest text-on-surface-variant">2023-11-20 14:02 UTC</span>
+</div>
+</div>
+<span class="px-2 py-0.5 bg-error-container text-on-error-container font-label text-[9px] font-bold tracking-widest uppercase rounded">CRITICAL</span>
+</div>
+<div class="p-4 bg-surface-container-high border-l-4 border-secondary-container rounded flex justify-between items-start">
+<div>
+<p class="text-xs font-body text-on-surface mb-2 leading-relaxed">Successfully migrated to v2 database shards. Latency reduced by 12%.</p>
+<div class="flex items-center gap-3">
+<span class="font-label text-[9px] uppercase tracking-widest text-on-surface-variant">Auth: S. TECH</span>
+<span class="font-label text-[9px] uppercase tracking-widest text-on-surface-variant">2023-11-18 09:45 UTC</span>
+</div>
+</div>
+<span class="px-2 py-0.5 bg-secondary-container/20 text-secondary font-label text-[9px] font-bold tracking-widest uppercase rounded">INFO</span>
+</div>
+</div>
+</div>
+</div>
+<!-- RIGHT COLUMN (Timeline/Event Log) -->
+<div class="col-span-12 lg:col-span-4">
+<div class="glass-panel p-8 rounded-lg border border-outline-variant/10 sticky top-24">
+<div class="flex items-center justify-between mb-8">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-lg" data-icon="analytics">analytics</span>
+<h2 class="text-sm font-bold font-headline uppercase tracking-widest text-on-surface">Lifecycle Timeline</h2>
+</div>
+<button class="material-symbols-outlined text-on-surface-variant text-sm hover:text-primary" data-icon="refresh">refresh</button>
+</div>
+<div class="relative">
+<!-- Vertical Line -->
+<div class="absolute left-1.5 top-0 bottom-0 w-[1px] bg-outline-variant/30"></div>
+<!-- Timeline Events -->
+<div class="space-y-8 relative">
+<!-- Event -->
+<div class="flex gap-6 items-start">
+<div class="relative z-10 w-3 h-3 rounded-full bg-tertiary mt-1.5 glow-cyan border-2 border-surface-container"></div>
+<div class="flex flex-col gap-1">
+<span class="font-label text-[10px] text-on-surface-variant">2023-11-21 16:30:12</span>
+<span class="text-xs font-bold font-headline text-on-surface">Support Ticket #142 Created</span>
+<p class="text-[10px] text-on-surface-variant font-body">Subject: API Key Revocation Error</p>
+</div>
+</div>
+<!-- Event -->
+<div class="flex gap-6 items-start">
+<div class="relative z-10 w-3 h-3 rounded-full bg-secondary mt-1.5 border-2 border-surface-container"></div>
+<div class="flex flex-col gap-1">
+<span class="font-label text-[10px] text-on-surface-variant">2023-11-19 04:12:55</span>
+<span class="text-xs font-bold font-headline text-on-surface">Billing Success</span>
+<p class="text-[10px] text-on-surface-variant font-body">Transaction: CH_8820XJ9921 ($2,400.00)</p>
+</div>
+</div>
+<!-- Event -->
+<div class="flex gap-6 items-start">
+<div class="relative z-10 w-3 h-3 rounded-full bg-primary mt-1.5 border-2 border-surface-container"></div>
+<div class="flex flex-col gap-1">
+<span class="font-label text-[10px] text-on-surface-variant">2023-10-15 10:00:00</span>
+<span class="text-xs font-bold font-headline text-on-surface">Plan Upgraded: SCALE</span>
+<p class="text-[10px] text-on-surface-variant font-body">Transitioned from GROWTH tier</p>
+</div>
+</div>
+<!-- Event -->
+<div class="flex gap-6 items-start">
+<div class="relative z-10 w-3 h-3 rounded-full bg-outline mt-1.5 border-2 border-surface-container"></div>
+<div class="flex flex-col gap-1">
+<span class="font-label text-[10px] text-on-surface-variant">2023-09-01 12:44:02</span>
+<span class="text-xs font-bold font-headline text-on-surface">Application Installed</span>
+<p class="text-[10px] text-on-surface-variant font-body">Source: Shopify App Store (Organic)</p>
+</div>
+</div>
+</div>
+</div>
+<div class="mt-12 pt-8 border-t border-outline-variant/10">
+<div class="flex items-center justify-between mb-4">
+<span class="font-label text-[10px] uppercase text-on-surface-variant">Health Score</span>
+<span class="font-label text-xs text-primary">98/100</span>
+</div>
+<div class="w-full h-1 bg-surface-container-highest rounded-full overflow-hidden">
+<div class="h-full bg-primary w-[98%]"></div>
+</div>
+<p class="mt-4 text-[10px] font-body text-on-surface-variant leading-relaxed">
+                            System telemetry indicates optimal synchronization across all distributed nodes. No anomalies detected in current cycle.
+                        </p>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>

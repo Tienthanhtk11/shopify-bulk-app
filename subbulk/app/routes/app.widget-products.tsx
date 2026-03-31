@@ -1,5 +1,5 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
-import type { SubscriptionOffer } from "@prisma/client";
+import type { SubscriptionOffer } from "../../generated/prisma/client";
 import { redirect } from "@remix-run/node";
 import {
   Form,
@@ -32,6 +32,7 @@ import {
   saveProductBulkPricing,
   type WidgetEnabledProductRow,
 } from "../models/widget-enabled-product.server";
+import { assertMerchantWriteAccess } from "../services/billing.server";
 import { listOffers } from "../models/subscription-offer.server";
 import { syncWidgetScopeRuleToShopify } from "../models/subscription-rule.server";
 
@@ -93,7 +94,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { admin, session } = await authenticate.admin(request);
+  const { admin, session, redirect } = await authenticate.admin(request);
+  await assertMerchantWriteAccess({
+    session,
+    redirect,
+    requiredFeature: "widgetProducts",
+  });
   const fd = await request.formData();
   const intent = String(fd.get("intent") || "");
 

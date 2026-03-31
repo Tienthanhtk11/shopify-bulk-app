@@ -28,6 +28,7 @@ import {
   getOrCreateWidgetSettings,
   updateWidgetSettings,
 } from "../models/widget-settings.server";
+import { assertMerchantWriteAccess } from "../services/billing.server";
 import { authenticate } from "../shopify.server";
 
 const FONT_OPTIONS = [
@@ -73,7 +74,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { session, admin } = await authenticate.admin(request);
+  const { session, admin, redirect } = await authenticate.admin(request);
+  await assertMerchantWriteAccess({
+    session,
+    redirect,
+    requiredFeature: "settings",
+  });
   const fd = await request.formData();
   const intent = String(fd.get("intent") || "widget");
 

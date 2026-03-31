@@ -36,12 +36,12 @@ function getPartnerPlanConfigs(): PartnerPlanConfig[] {
     },
     {
       planKey: "growth",
-      aliases: parseCsv(process.env.PARTNER_PLAN_GROWTH_NAMES, ["Growth"]),
+      aliases: parseCsv(process.env.PARTNER_PLAN_GROWTH_NAMES, ["Growth", "Premium"]),
       gids: parseCsv(process.env.PARTNER_PLAN_GROWTH_GIDS),
     },
     {
       planKey: "scale",
-      aliases: parseCsv(process.env.PARTNER_PLAN_SCALE_NAMES, ["Scale"]),
+      aliases: parseCsv(process.env.PARTNER_PLAN_SCALE_NAMES, ["Scale", "Ultra"]),
       gids: parseCsv(process.env.PARTNER_PLAN_SCALE_GIDS),
     },
   ];
@@ -69,11 +69,11 @@ export function resolvePartnerDashboardPlan(input: {
     }
   }
 
-  if (normalizedName.includes("scale")) {
+  if (normalizedName.includes("scale") || normalizedName.includes("ultra")) {
     return { planKey: "scale", matchedBy: "heuristic" };
   }
 
-  if (normalizedName.includes("growth")) {
+  if (normalizedName.includes("growth") || normalizedName.includes("premium")) {
     return { planKey: "growth", matchedBy: "heuristic" };
   }
 

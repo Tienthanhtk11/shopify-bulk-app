@@ -1,6 +1,12 @@
-import type { MerchantPlan } from "@prisma/client";
+import type { MerchantPlan } from "../../generated/prisma/client";
 import type { EntitledFeatureKey } from "./entitlements.shared";
 import { resolveEntitlements } from "./entitlements.server";
+import { getLatestMerchantPlan, upsertMerchantFromSession } from "../models/merchant.server";
+
+type MerchantSessionLike = {
+  shop: string;
+  email?: string | null;
+};
 
 export function requiredFeatureForPath(pathname: string) {
   if (pathname.startsWith("/app/analytics")) return "analytics" as const;
@@ -21,5 +27,60 @@ export function merchantCanAccessPath(pathname: string, plan: MerchantPlan | nul
   return {
     allowed: entitlements.features[requiredFeature],
     requiredFeature,
+  };
+}
+
+export function merchantCanWrite(plan: MerchantPlan | null, requiredFeature?: EntitledFeatureKey | null) {
+  const entitlements = resolveEntitlements(plan);
+
+  if (requiredFeature && !entitlements.features[requiredFeature]) {
+    return {
+      allowed: false,
+      requiredFeature,
+      reason: "feature_locked" as const,
+      entitlements,
+    };
+  }
+
+  if (entitlements.planKey !== "free" && !entitlements.hasActivePlanAccess) {
+    return {
+      allowed: false,
+      requiredFeature: requiredFeature ?? null,
+      reason: "billing_inactive" as const,
+      entitlements,
+    };
+  }
+
+  return {
+    allowed: true,
+    requiredFeature: requiredFeature ?? null,
+    reason: null,
+    entitlements,
+  };
+}
+
+export async function assertMerchantWriteAccess(input: {
+  session: MerchantSessionLike;
+  redirect: (url: string) => never;
+  requiredFeature?: EntitledFeatureKey | null;
+}) {
+  await upsertMerchantFromSession(input.session);
+  const latestPlan = await getLatestMerchantPlan(input.session.shop);
+  const access = merchantCanWrite(latestPlan, input.requiredFeature ?? null);
+
+  if (!access.allowed) {
+    const query = new URLSearchParams();
+    if (access.requiredFeature) {
+      query.set("required", access.requiredFeature);
+    }
+    if (access.reason) {
+      query.set("writeBlocked", access.reason);
+    }
+    throw input.redirect(`/app/billing?${query.toString()}`);
+  }
+
+  return {
+    latestPlan,
+    entitlements: access.entitlements,
   };
 }

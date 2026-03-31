@@ -449,3 +449,7 @@
 - Xay domain merchant noi bo xoay quanh billing state cua Shopify, thay vi tu xay mot he thong license rieng.
 - Tach billing status, entitlement state, va compliance lifecycle thanh 3 concern rieng.
 - Implement compliance webhooks va merchant records truoc khi dua plan-based access control vao production.
+
+
+Email: admin@thanhpt.online
+Password: stored in the internal admin account database record; no plain-text credential documented here
