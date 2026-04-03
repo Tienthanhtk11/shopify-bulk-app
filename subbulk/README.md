@@ -73,10 +73,174 @@ Prisma đã có các nhóm dữ liệu chính:
 ### 3. Billing + Entitlements
 
 - có billing snapshot nội bộ cho merchant
-- có entitlement matrix cho `Free`, `Growth`, `Scale`
+- có entitlement matrix cho `Free`, `Premium`, `Ultra`
 - có route-level và action-level write gating
 - có managed pricing entry qua `SHOPIFY_MANAGED_PRICING_APP_HANDLE`
 - có reconciliation route để refresh billing state khi merchant quay lại app
+
+## Merchant Feature Inventory
+
+Mục này chỉ liệt kê tính năng merchant-facing để phục vụ đóng gói plan bán cho merchant.
+
+Không bao gồm các capability internal-only của standalone admin portal.
+
+### 1. Embedded App For Merchants
+
+Các màn chính merchant đang có trong embedded app:
+
+- `Analytics`
+- `Billing`
+- `Subscriptions`
+- `Subscription rule`
+- `Settings`
+- `Privacy`
+
+### 2. Merchant Analytics And Reporting
+
+- xem tổng số subscription contracts
+- xem active rate, churn rate, growth rate
+- xem billing outlook trong 7 ngày và 30 ngày tới
+- xem average quantity trên subscription orders
+- xem breakdown theo trạng thái `ACTIVE`, `PAUSED`, `CANCELLED`
+- xem top subscribed products
+- xem danh sách subscription mới tạo gần đây
+- xem health summary để merchant hiểu trạng thái tăng trưởng / retention
+
+### 3. Billing, Plans, And Access Control
+
+- xem gói hiện tại của merchant
+- xem billing status mới nhất đồng bộ từ Shopify
+- xem danh sách plan public khả dụng trong app
+- xem highlights của từng gói ngay trên trang billing
+- mở Shopify-hosted pricing page khi managed pricing đã publish
+- quay về billing welcome flow để reconcile billing snapshot sau khi đổi gói
+- tự động chặn write actions khi billing chưa active hoặc feature chưa thuộc plan
+- tự động redirect merchant sang trang billing nếu route đang mở vượt entitlement hiện tại
+
+### 4. Subscription Operations In Admin
+
+- xem danh sách subscription contracts của shop
+- filter theo trạng thái `ALL`, `ACTIVE`, `PAUSED`, `CANCELLED`
+- tìm kiếm theo customer name, email, contract id, product title
+- sort theo next billing date hoặc created date
+- xem next billing date
+- xem created date
+- xem quantity per subscription
+- xem payment method summary do Shopify trả về
+- xem last payment status khi Shopify đã ghi nhận billing attempt
+- xem counters tổng hợp cho active / paused / cancelled
+
+### 5. Subscription Rule Management
+
+- tạo và cập nhật subscription rule cho shop
+- cấu hình title hiển thị cho subscription offer
+- cấu hình internal name cho rule
+- cấu hình nhãn `Deliver every` / plan selector label
+- chọn danh sách sản phẩm được áp dụng selling plan
+- dùng explicit product scope thay vì chỉ cấu hình thủ công ngoài Shopify
+- cấu hình nhiều selling plan intervals trong cùng một rule
+- hỗ trợ interval theo tuần / tháng và số chu kỳ lặp
+- cấu hình discount type theo `PERCENTAGE` hoặc `FIXED`
+- cấu hình discount value cho từng selling plan
+- lưu và đồng bộ selling plan group lên Shopify
+- recreate selling plan group khi cấu hình cốt lõi thay đổi
+- sync lại danh sách sản phẩm của selling plan group trên Shopify
+- lưu bulk pricing JSON theo từng sản phẩm ngay trong flow subscription rule
+- tự thêm sản phẩm vào danh sách widget-enabled khi merchant cấu hình subscription rule
+
+### 6. Widget Product Management
+
+- chọn nhiều sản phẩm bằng Shopify Resource Picker
+- thêm sản phẩm vào danh sách được bật widget
+- chống thêm trùng sản phẩm đã có trong danh sách
+- gỡ sản phẩm khỏi danh sách widget-enabled
+- deep link từ Discounts admin vào đúng màn cấu hình widget products
+- chỉnh bulk pricing JSON cho từng sản phẩm
+- đọc và lưu bulk pricing vào product metafield
+- tự sync widget scope rule sau khi thêm / gỡ sản phẩm
+- mở nhanh product admin URL của Shopify cho từng sản phẩm
+
+### 7. Storefront Widget Customization
+
+- chỉnh widget heading
+- chỉnh purchase options label
+- chỉnh subscription footer
+- chỉnh free shipping note
+- chỉnh primary accent color
+- chỉnh border / savings color
+- chọn font family cho widget
+- chỉnh border radius
+- chỉnh border thickness
+- bật / tắt savings badge
+- bật / tắt compare-at price
+- bật / tắt subscription details
+- bật custom CSS cho widget wrapper
+- nhập custom CSS riêng cho storefront widget
+- xem live preview ngay trong embedded app trước khi publish ra storefront
+- mở theme editor từ embedded app để đặt block vào product template
+
+### 8. Discount And Checkout Enablement
+
+- lưu default subscription discount để storefront preview có dữ liệu mặc định
+- kích hoạt backend bulk discount bằng Shopify Function
+- hỗ trợ bulk pricing + subscription stacking đúng trong checkout
+- dùng Shopify discount primitives thay vì draft-order workaround
+
+### 9. Storefront Experience For Buyers
+
+- render theme app block trên product page
+- hiển thị bulk pricing tiers từ metafield sản phẩm
+- hiển thị lựa chọn mua lẻ và subscribe-and-save
+- hiển thị text, màu sắc, layout theo widget settings merchant đã cấu hình
+- hiển thị savings badge, compare-at price, subscription details theo display options merchant bật
+- hỗ trợ placement trong product information area của theme
+
+### 10. Customer Self-Service Portal
+
+App proxy portal `/apps/subbulk/portal` hiện có:
+
+- customer xem toàn bộ subscription của chính họ
+- customer tìm kiếm subscription theo title, status, reference
+- customer xem next billing date
+- customer xem created date
+- customer xem quantity per order
+- customer xem payment method label do Shopify cung cấp
+- customer xem last payment status khi Shopify có dữ liệu
+- customer pause subscription
+- customer resume subscription
+- customer cancel subscription
+- success / error feedback bằng toast trong portal
+- ownership validation server-side để customer không thao tác được contract không thuộc mình
+
+### 11. Customer Account UI Extension
+
+Extension trên `shopify.com/account/profile` hiện có:
+
+- hiển thị subscription summary trực tiếp trong Shopify Customer Account
+- hiển thị total / active / paused / cancelled counts
+- hiển thị từng subscription với status, quantity, next billing, created date
+- hiển thị payment method summary
+- hiển thị last payment status
+- cho phép pause / resume / cancel trực tiếp từ customer account
+- dùng native Shopify toast API cho action feedback
+- giữ lỗi load quan trọng dưới dạng banner thay vì thông báo trôi mất
+
+### 12. Privacy And Data Controls
+
+- merchant có trang privacy trong embedded app
+- merchant có thể tạo deletion request cho operational data của app
+- hệ thống giữ lại minimal install / billing metadata cho reconciliation, support, và legal obligations
+- compliance webhooks đã được đăng ký cho data request / redact flows
+
+### 13. Feature Packaging Notes
+
+Một số nhóm tính năng tự nhiên để anh chia plan:
+
+- nền tảng storefront: widget enablement, bulk pricing metafield, theme editor placement, widget styling
+- vận hành subscription: subscription list, search/filter, payment status visibility, selling plan configuration
+- self-service customer: app proxy portal, Customer Account UI extension, pause/resume/cancel
+- commercial controls: billing page, managed pricing return flow, entitlement-gated access
+- premium / ops-heavy capabilities: advanced analytics, automation-ready flows, priority-support positioning
 
 ### 4. Privacy + Background Jobs
 

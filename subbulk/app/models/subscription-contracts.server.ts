@@ -37,6 +37,27 @@ type ShopifyCustomerPaymentMethodNode = {
   revokedAt?: string | null;
 } | null;
 
+type ShopifyGraphqlPayload<TData> = {
+  data?: TData;
+  errors?: Array<{
+    message?: string;
+  }>;
+};
+
+type ShopifyAdminContractsQuery = {
+  subscriptionContracts?: {
+    nodes?: ShopifyContractNode[];
+  } | null;
+};
+
+type ShopifyCustomerContractsQuery = {
+  customer?: {
+    subscriptionContracts?: {
+      nodes?: ShopifyContractNode[];
+    } | null;
+  } | null;
+};
+
 type ShopifyContractNode = {
   id?: string;
   status?: SubscriptionContractStatus;
@@ -68,7 +89,7 @@ function parseContractShortId(id: string) {
 }
 
 function resolvePaymentMethodStatus(
-  paymentMethod: ShopifyCustomerPaymentMethodNode,
+  paymentMethod: ShopifyCustomerPaymentMethodNode | undefined,
 ): PaymentMethodStatus {
   if (!paymentMethod?.id) return "UNAVAILABLE";
   if (paymentMethod.revokedAt) return "REVOKED";
@@ -224,16 +245,17 @@ async function queryContractsWithOptionalPaymentMethod(
   queryWithPaymentMethod: string,
   queryFallback: string,
   variables: Record<string, unknown>,
-) {
+): Promise<ShopifyGraphqlPayload<Record<string, unknown>>> {
   const firstResponse = await admin.graphql(queryWithPaymentMethod, { variables });
-  const firstPayload = await firstResponse.json();
+  const firstPayload =
+    (await firstResponse.json()) as ShopifyGraphqlPayload<Record<string, unknown>>;
 
   if (!Array.isArray(firstPayload.errors) || firstPayload.errors.length === 0) {
     return firstPayload;
   }
 
   const fallbackResponse = await admin.graphql(queryFallback, { variables });
-  return fallbackResponse.json();
+  return (await fallbackResponse.json()) as ShopifyGraphqlPayload<Record<string, unknown>>;
 }
 
 async function fetchContractsForStatus(
@@ -241,7 +263,7 @@ async function fetchContractsForStatus(
   status: SubscriptionContractStatus,
   first = 100,
 ) {
-  const json = await queryContractsWithOptionalPaymentMethod(
+  const json = (await queryContractsWithOptionalPaymentMethod(
     admin,
     `#graphql
     query SubBulkAdminContracts($first: Int!, $query: String!) {
@@ -263,7 +285,7 @@ ${ADMIN_CONTRACT_FIELDS_FALLBACK}
       first,
       query: `status:${status}`,
     },
-  );
+  )) as ShopifyGraphqlPayload<ShopifyAdminContractsQuery>;
   const nodes = (json.data?.subscriptionContracts?.nodes ?? []) as ShopifyContractNode[];
 
   return nodes
@@ -302,7 +324,7 @@ export async function listCustomerSubscriptionContracts(
   customerId: string,
   first = 20,
 ) {
-  const json = await queryContractsWithOptionalPaymentMethod(
+  const json = (await queryContractsWithOptionalPaymentMethod(
     admin,
     `#graphql
     query SubBulkCustomerContracts($id: ID!, $first: Int!) {
@@ -328,7 +350,7 @@ ${CUSTOMER_CONTRACT_FIELDS_FALLBACK}
       id: customerId,
       first,
     },
-  );
+  )) as ShopifyGraphqlPayload<ShopifyCustomerContractsQuery>;
   const nodes = (json.data?.customer?.subscriptionContracts?.nodes ?? []) as ShopifyContractNode[];
 
   return nodes

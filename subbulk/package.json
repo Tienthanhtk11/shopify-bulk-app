@@ -4,6 +4,7 @@
   "scripts": {
     "build": "remix vite:build",
     "test": "vitest run",
+    "bench:admin-vitals": "node ./scripts/admin-web-vitals-benchmark.mjs",
     "dev": "shopify app dev",
     "config:link": "shopify app config link",
     "generate": "shopify app generate",
