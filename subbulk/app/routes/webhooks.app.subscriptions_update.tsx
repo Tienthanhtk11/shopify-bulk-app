@@ -1,5 +1,6 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { recordMerchantEvent, syncMerchantPlanSnapshot } from "../models/merchant.server";
+import { extractWebhookSubscriptionTimeline } from "../services/merchant-plan-timeline.shared";
 import { resolvePartnerDashboardPlan } from "../services/partner-billing.server";
 import { authenticate } from "../shopify.server";
 
@@ -69,6 +70,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const name = String(appSubscription?.name || "Managed plan");
   const adminGraphqlApiId = readString(appSubscription?.admin_graphql_api_id);
   const lineItemPlanNames = readLineItemPlanNames(appSubscription ?? {});
+  const timeline = extractWebhookSubscriptionTimeline(appSubscription);
   const resolvedPlan = resolvePartnerDashboardPlan({
     planName: name,
     shopifySubscriptionGid: adminGraphqlApiId,
@@ -83,6 +85,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     billingInterval: readBillingInterval(appSubscription ?? {}),
     isTest: readBoolean(appSubscription?.test) || readBoolean(appSubscription?.is_test),
     shopifySubscriptionGid: adminGraphqlApiId,
+    activatedAt: timeline.activatedAt,
+    currentPeriodEndAt: timeline.currentPeriodEndAt,
+    trialEndsAt: timeline.trialEndsAt,
+    canceledAt: timeline.canceledAt,
     rawPayload: {
       ...(typeof payload === "object" && payload !== null ? payload : {}),
       _subbulkResolvedPlanKey: resolvedPlan.planKey,

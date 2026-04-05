@@ -1,4 +1,5 @@
-import type { LoaderFunctionArgs } from "@remix-run/node";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
+import { json } from "@remix-run/node";
 import { TitleBar } from "@shopify/app-bridge-react";
 import {
   Badge,
@@ -11,13 +12,57 @@ import {
   Page,
   Text,
 } from "@shopify/polaris";
-import { useLoaderData } from "@remix-run/react";
+import { Form, useActionData, useLoaderData } from "@remix-run/react";
 import { getLatestMerchantPlan, upsertMerchantFromSession } from "../models/merchant.server";
 import { listAdminPlanDefinitions } from "../services/admin-plan-catalog.server";
+import { createManualTestSubscription, getBillingTestFallbackState } from "../services/billing-test-fallback.server";
 import { FEATURE_LABELS } from "../services/entitlements.shared";
 import { resolveEntitlements } from "../services/entitlements.server";
 import { getManagedPricingPageState } from "../services/managed-pricing.server";
 import { authenticate } from "../shopify.server";
+
+export const action = async ({ request }: ActionFunctionArgs) => {
+  const { admin, session, redirect } = await authenticate.admin(request);
+  const formData = await request.formData();
+  const intent = String(formData.get("intent") || "").trim();
+
+  if (intent !== "start_test_charge") {
+    return json({ error: "Unsupported billing action." }, { status: 400 });
+  }
+
+  const managedPricing = getManagedPricingPageState(session.shop);
+  const billingTestFallback = getBillingTestFallbackState();
+  if (!billingTestFallback.enabled) {
+    return json({ error: "Manual test billing fallback is disabled for this environment." }, { status: 403 });
+  }
+
+  if (managedPricing.ready) {
+    return json({ error: "Managed pricing is already live. Use the Shopify-hosted pricing page instead." }, { status: 409 });
+  }
+
+  const rawPlanKey = String(formData.get("planKey") || "free").trim().toLowerCase();
+  if (rawPlanKey !== "growth" && rawPlanKey !== "scale") {
+    return json({ error: "Manual test billing fallback only supports Premium and Ultra." }, { status: 400 });
+  }
+
+  try {
+    const result = await createManualTestSubscription({
+      admin,
+      shopDomain: session.shop,
+      planKey: rawPlanKey,
+      billingInterval: formData.get("billingInterval"),
+    });
+
+    return redirect(result.confirmationUrl, { target: "_top" });
+  } catch (error) {
+    return json(
+      {
+        error: error instanceof Error ? error.message : "Unable to create the test subscription.",
+      },
+      { status: 400 },
+    );
+  }
+};
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -27,6 +72,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
   const planCatalog = await listAdminPlanDefinitions();
   const managedPricing = getManagedPricingPageState(session.shop);
+  const billingTestFallback = getBillingTestFallbackState();
 
   return {
     shop: session.shop,
@@ -34,16 +80,19 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     entitlements,
     planCatalog,
     managedPricing,
+    billingTestFallback,
     requiredFeature: url.searchParams.get("required") || null,
     writeBlocked: url.searchParams.get("writeBlocked") || null,
   };
 };
 
 export default function BillingPage() {
-  const { shop, latestPlan, entitlements, planCatalog, managedPricing, requiredFeature, writeBlocked } = useLoaderData<typeof loader>();
+  const { shop, latestPlan, entitlements, planCatalog, managedPricing, billingTestFallback, requiredFeature, writeBlocked } = useLoaderData<typeof loader>();
+  const actionData = useActionData<typeof action>();
   const featureEntries = Object.entries(entitlements.features);
   const showResolutionBanner = entitlements.planKey !== "free" && !entitlements.hasActivePlanAccess;
   const visiblePlans = planCatalog.filter((plan) => entitlements.planKey === plan.key || (plan.isActive && plan.isPublic));
+  const showBillingTestFallback = !managedPricing.ready && billingTestFallback.enabled;
 
   return (
     <Page>
@@ -96,6 +145,38 @@ export default function BillingPage() {
               </Text>
               <Text as="p" variant="bodyMd">
                 The app handle is configured, but SubBulk intentionally hides the external pricing page until Partner Dashboard pricing content is published. This prevents merchants and reviewers from landing on a Shopify-hosted 404.
+              </Text>
+            </BlockStack>
+          </Card>
+        ) : null}
+
+        {actionData?.error ? (
+          <Card>
+            <BlockStack gap="100">
+              <Text as="h2" variant="headingMd">
+                Billing test flow failed
+              </Text>
+              <Text as="p" variant="bodyMd">
+                {actionData.error}
+              </Text>
+            </BlockStack>
+          </Card>
+        ) : null}
+
+        {showBillingTestFallback ? (
+          <Card>
+            <BlockStack gap="100">
+              <InlineStack align="space-between" blockAlign="center">
+                <Text as="h2" variant="headingMd">
+                  Manual test billing fallback is active
+                </Text>
+                <Badge tone="info">Test only</Badge>
+              </InlineStack>
+              <Text as="p" variant="bodyMd">
+                Managed pricing stays the production path, but this environment can temporarily create Shopify Billing API test charges for Premium and Ultra until the hosted pricing page is published.
+              </Text>
+              <Text as="p" variant="bodySm" tone="subdued">
+                These requests use test charges, open Shopify approval in the top window, and return to the billing welcome screen for reconciliation.
               </Text>
             </BlockStack>
           </Card>
@@ -204,6 +285,25 @@ export default function BillingPage() {
                             {isCurrent ? "Review in Shopify billing" : "Change to this plan"}
                           </Button>
                         </a>
+                      ) : showBillingTestFallback && plan.key !== "free" ? (
+                        <BlockStack gap="200">
+                          <Form method="post">
+                            <input type="hidden" name="intent" value="start_test_charge" />
+                            <input type="hidden" name="planKey" value={plan.key} />
+                            <input type="hidden" name="billingInterval" value="monthly" />
+                            <Button variant={isCurrent ? "secondary" : "primary"} fullWidth submit>
+                              {isCurrent ? "Re-run monthly test charge" : "Start monthly test charge"}
+                            </Button>
+                          </Form>
+                          <Form method="post">
+                            <input type="hidden" name="intent" value="start_test_charge" />
+                            <input type="hidden" name="planKey" value={plan.key} />
+                            <input type="hidden" name="billingInterval" value="annual" />
+                            <Button fullWidth submit>
+                              {isCurrent ? "Re-run annual test charge" : "Start annual test charge"}
+                            </Button>
+                          </Form>
+                        </BlockStack>
                       ) : (
                         <Text as="p" variant="bodySm" tone="subdued">
                           {managedPricing.configured

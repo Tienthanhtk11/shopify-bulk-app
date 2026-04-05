@@ -183,6 +183,31 @@ Flow:
 
 Source of truth: `app/routes/app.welcome.tsx`
 
+## Manual Test Billing Fallback
+
+Trong giai đoạn managed pricing chưa publish xong, app có thể bật một fallback test-only dựa trên Billing API thủ công.
+
+### Flags
+
+1. `SHOPIFY_BILLING_TEST_FALLBACK_ENABLED` phải được bật thành truthy
+2. `SHOPIFY_MANAGED_PRICING_READY` vẫn phải đang tắt hoặc unset
+
+### Behavior
+
+1. Billing page vẫn coi managed pricing là luồng production chính
+2. Khi managed pricing chưa ready và fallback được bật, merchant sẽ thấy nút tạo test charge cho Premium và Ultra
+3. Action này gọi `appSubscriptionCreate` với `test: true`
+4. `replacementBehavior` dùng `APPLY_IMMEDIATELY` để test trực tiếp các bước Free -> Premium -> Ultra
+5. Merchant approve charge trên Shopify-hosted confirmation page rồi quay về `/app/welcome`
+
+### Guardrails
+
+1. Fallback này chỉ dùng cho test/dev store, không phải production billing path
+2. Khi managed pricing đã publish xong, nên tắt fallback env và chỉ giữ Shopify-hosted pricing page
+3. Sau mỗi lần test charge, vẫn phải xác nhận `/app/welcome` reconcile đúng snapshot nội bộ
+
+Source of truth: `app/services/billing-test-fallback.server.ts`, `app/routes/app.billing.tsx`
+
 ## Plan Mapping Risks
 
 Các rủi ro chính hiện tại:

@@ -521,6 +521,10 @@ export async function syncMerchantPlanSnapshot(input: {
   billingInterval?: string | null;
   isTest?: boolean;
   shopifySubscriptionGid?: string | null;
+  activatedAt?: Date | null;
+  currentPeriodEndAt?: Date | null;
+  trialEndsAt?: Date | null;
+  canceledAt?: Date | null;
   rawPayload?: unknown;
 }) {
   const merchant = await getMerchantByShopDomain(input.shopDomain);
@@ -535,8 +539,16 @@ export async function syncMerchantPlanSnapshot(input: {
       billingInterval: input.billingInterval ?? null,
       isTest: input.isTest ?? false,
       shopifySubscriptionGid: input.shopifySubscriptionGid ?? null,
+      activatedAt:
+        input.activatedAt !== undefined
+          ? input.activatedAt
+          : input.status === "active" || input.status === "trialing"
+            ? new Date()
+            : null,
+      currentPeriodEndAt: input.currentPeriodEndAt ?? null,
+      trialEndsAt: input.trialEndsAt ?? null,
+      canceledAt: input.canceledAt ?? null,
       rawPayloadJson: safeJson(input.rawPayload),
-      activatedAt: input.status === "active" ? new Date() : null,
     },
   });
 }

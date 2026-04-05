@@ -5,6 +5,7 @@ import { useDeferredValue, useMemo, useState } from "react";
 import { createManualMerchant, listMerchantAdminSummaries } from "../models/merchant.server";
 import { getCanonicalPlanName } from "../services/admin-plan-catalog.shared";
 import { requireInternalAdminUser } from "../services/internal-admin-portal.server";
+import { isExpiredMerchantPlan } from "../services/merchant-plan-timeline.shared";
 
 export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   await requireInternalAdminUser(request);
@@ -300,18 +301,21 @@ export default function InternalAdminMerchantsPage() {
                 </span>
               </div>
               <div style={styles.centerCell}>
-                <span
-                  style={{
-                    ...styles.statusBadge,
-                    ...(merchant.entitlements.planKey === "scale"
-                      ? styles.planUltra
-                      : merchant.entitlements.planKey === "growth"
-                        ? styles.planPremium
-                        : styles.planFree),
-                  }}
-                >
-                  {getCanonicalPlanName(merchant.latestPlan?.planKey || merchant.entitlements.planKey).toUpperCase()}
-                </span>
+                <div style={styles.planBadgeStack}>
+                  <span
+                    style={{
+                      ...styles.statusBadge,
+                      ...(merchant.entitlements.planKey === "scale"
+                        ? styles.planUltra
+                        : merchant.entitlements.planKey === "growth"
+                          ? styles.planPremium
+                          : styles.planFree),
+                    }}
+                  >
+                    {getCanonicalPlanName(merchant.latestPlan?.planKey || merchant.entitlements.planKey).toUpperCase()}
+                  </span>
+                  {isExpiredMerchantPlan(merchant.latestPlan) ? <span style={{ ...styles.statusBadge, ...styles.planExpired }}>Expired</span> : null}
+                </div>
               </div>
               <div style={styles.centerCell}>
                 <span style={styles.eventText}>{readLatestEvent(merchant.events)}</span>
@@ -443,12 +447,14 @@ const styles: Record<string, React.CSSProperties> = {
   rowTitleLink: { display: "inline-flex", alignItems: "center", color: "#dae2fd", textDecoration: "none", fontSize: "15px", fontWeight: 600 },
   rowMeta: { margin: "6px 0 0", fontSize: "11px", color: "#859399", fontFamily: '"Space Grotesk", sans-serif', textTransform: "uppercase", letterSpacing: "0.08em" },
   centerCell: { display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center" },
+  planBadgeStack: { display: "flex", alignItems: "center", justifyContent: "center", gap: "8px", flexWrap: "wrap" },
   statusBadge: { display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: "96px", padding: "6px 10px", borderRadius: "999px", fontFamily: '"Space Grotesk", sans-serif', fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.14em" },
   statusActive: { color: "#73f1e4", background: "rgba(83,212,200,0.12)" },
   statusMuted: { color: "#bbc9cf", background: "rgba(133,147,153,0.12)" },
   planFree: { color: "#859399", background: "rgba(133,147,153,0.12)" },
   planPremium: { color: "#548dff", background: "rgba(84,141,255,0.12)" },
   planUltra: { color: "#3cf3ff", background: "rgba(60,243,255,0.12)" },
+  planExpired: { color: "#ffb4ab", background: "rgba(147,0,10,0.22)", minWidth: "auto" },
   eventText: { color: "#bbc9cf", fontFamily: '"Space Grotesk", sans-serif', fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.12em" },
   controlArrow: { color: "#859399", fontSize: "20px" },
   controlLink: { display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: "92px", minHeight: "36px", padding: "0 14px", borderRadius: "999px", color: "#3cf3ff", border: "1px solid rgba(60,243,255,0.22)", background: "rgba(60,243,255,0.08)", textDecoration: "none", fontFamily: '"Space Grotesk", sans-serif', fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.16em" },

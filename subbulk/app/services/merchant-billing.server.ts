@@ -1,5 +1,6 @@
 import type { AdminApiContext } from "@shopify/shopify-app-remix/server";
 import { getLatestMerchantPlan, recordMerchantEvent, syncMerchantPlanSnapshot } from "../models/merchant.server";
+import { extractSubscriptionTimeline } from "./merchant-plan-timeline.shared";
 import { resolvePartnerDashboardPlan } from "./partner-billing.server";
 
 type ActiveSubscriptionSnapshot = {
@@ -9,6 +10,10 @@ type ActiveSubscriptionSnapshot = {
   status: string;
   isTest: boolean;
   billingInterval: string | null;
+  activatedAt: Date | null;
+  currentPeriodEndAt: Date | null;
+  trialEndsAt: Date | null;
+  canceledAt: Date | null;
   matchedPlanKey: "free" | "growth" | "scale";
   matchedBy: "gid" | "name" | "heuristic" | "default";
   rawPayload: unknown;
@@ -96,6 +101,7 @@ function toSnapshot(subscription: Record<string, unknown>): ActiveSubscriptionSn
   const name = String(subscription.name || "Managed plan");
   const subscriptionGid = readString(subscription.id);
   const lineItemPlanNames = extractLineItemPlanNames(subscription.lineItems);
+  const timeline = extractSubscriptionTimeline(subscription);
   const resolvedPlan = resolvePartnerDashboardPlan({
     planName: name,
     shopifySubscriptionGid: subscriptionGid,
@@ -109,6 +115,10 @@ function toSnapshot(subscription: Record<string, unknown>): ActiveSubscriptionSn
     status: normalizeStatus(subscription.status),
     isTest: readBoolean(subscription.test),
     billingInterval: extractBillingInterval(subscription.lineItems),
+    activatedAt: timeline.activatedAt,
+    currentPeriodEndAt: timeline.currentPeriodEndAt,
+    trialEndsAt: timeline.trialEndsAt,
+    canceledAt: timeline.canceledAt,
     matchedPlanKey: resolvedPlan.planKey,
     matchedBy: resolvedPlan.matchedBy,
     rawPayload: subscription,
@@ -127,7 +137,11 @@ function snapshotChanged(
     latestPlan.status === next.status &&
     latestPlan.billingInterval === next.billingInterval &&
     latestPlan.isTest === next.isTest &&
-    latestPlan.shopifySubscriptionGid === next.subscriptionGid
+    latestPlan.shopifySubscriptionGid === next.subscriptionGid &&
+    String(latestPlan.activatedAt || "") === String(next.activatedAt || "") &&
+    String(latestPlan.currentPeriodEndAt || "") === String(next.currentPeriodEndAt || "") &&
+    String(latestPlan.trialEndsAt || "") === String(next.trialEndsAt || "") &&
+    String(latestPlan.canceledAt || "") === String(next.canceledAt || "")
   );
 }
 
@@ -141,9 +155,13 @@ export async function reconcileMerchantBillingFromAdmin(admin: AdminApiContext, 
           name
           status
           test
+          createdAt
+          currentPeriodEnd
+          trialDays
           lineItems {
             id
             plan {
+              name
               pricingDetails {
                 __typename
                 ... on AppRecurringPricing {
@@ -194,6 +212,10 @@ export async function reconcileMerchantBillingFromAdmin(admin: AdminApiContext, 
       billingInterval: primary.billingInterval,
       isTest: primary.isTest,
       shopifySubscriptionGid: primary.subscriptionGid,
+      activatedAt: primary.activatedAt,
+      currentPeriodEndAt: primary.currentPeriodEndAt,
+      trialEndsAt: primary.trialEndsAt,
+      canceledAt: primary.canceledAt,
       rawPayload: {
         source: "admin.reconcile",
         matchedBy: primary.matchedBy,

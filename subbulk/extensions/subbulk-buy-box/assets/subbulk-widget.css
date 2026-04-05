@@ -126,6 +126,78 @@
   white-space: nowrap;
 }
 
+.subbulk__deliver-menu {
+  position: relative;
+  min-width: 180px;
+}
+
+.subbulk__deliver-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 12px;
+  border-radius: var(--subbulk-radius);
+  border: var(--subbulk-border-width) solid #ccc;
+  background: #fff;
+  color: var(--subbulk-text);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.subbulk__deliver-toggle-label {
+  min-width: 0;
+}
+
+.subbulk__deliver-chevron {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: #666;
+}
+
+.subbulk__deliver-options {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 20;
+  display: grid;
+  gap: 4px;
+  padding: 6px;
+  border: var(--subbulk-border-width) solid #d9d9d9;
+  border-radius: calc(var(--subbulk-radius) + 2px);
+  background: #fff;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
+}
+
+.subbulk__deliver-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: var(--subbulk-radius);
+  background: transparent;
+  color: var(--subbulk-text);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.subbulk__deliver-option:hover,
+.subbulk__deliver-option--active {
+  background: rgba(46, 125, 50, 0.08);
+}
+
+.subbulk__deliver-option-check {
+  color: var(--subbulk-green);
+  font-weight: 700;
+}
+
 .subbulk__deliver-select {
   padding: 6px 10px;
   border-radius: var(--subbulk-radius);
@@ -351,8 +423,52 @@
 }
 
 @media (max-width: 640px) {
+  .subbulk {
+    max-width: none;
+    width: 100%;
+    font-size: 13px;
+  }
+
+  .subbulk__header-price {
+    align-items: flex-start;
+    gap: 6px 10px;
+    margin-bottom: 10px;
+  }
+
+  .subbulk__price-current {
+    font-size: 1.55rem;
+  }
+
+  .subbulk__price-compare {
+    font-size: 0.95rem;
+  }
+
+  .subbulk__badge-save {
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+  }
+
+  .subbulk__heading-red {
+    font-size: 14px;
+    margin: 14px 0 4px;
+  }
+
+  .subbulk__subheading {
+    margin-bottom: 10px;
+  }
+
+  .subbulk__option {
+    padding: 12px;
+  }
+
+  .subbulk__option--active {
+    padding: 11px;
+  }
+
   .subbulk__qty-total {
     grid-template-columns: 1fr;
+    gap: 10px;
   }
 
   .subbulk__option-row,
@@ -361,7 +477,55 @@
     align-items: flex-start;
   }
 
-  .subbulk__option-price,
+  .subbulk__option-title,
+  .subbulk__deliver-row,
+  .subbulk__deliver-menu,
+  .subbulk__deliver-select {
+    width: 100%;
+  }
+
+  .subbulk__option-title {
+    gap: 10px;
+  }
+
+  .subbulk__option-price {
+    width: 100%;
+    text-align: left;
+    padding-left: 34px;
+  }
+
+  .subbulk__deliver-row {
+    gap: 8px;
+  }
+
+  .subbulk__deliver-label {
+    white-space: normal;
+  }
+
+  .subbulk__deliver-select {
+    min-width: 0;
+  }
+
+  .subbulk__deliver-options {
+    left: 0;
+    right: 0;
+    top: calc(100% + 8px);
+  }
+
+  .subbulk__footer-powered {
+    text-align: center;
+    margin-top: 8px;
+  }
+
+  .subbulk__table {
+    font-size: 12px;
+  }
+
+  .subbulk__table th,
+  .subbulk__table td {
+    padding: 8px;
+  }
+
   .subbulk__portal-link,
   .subbulk-account-portal__button {
     width: 100%;
@@ -369,6 +533,34 @@
   }
 
   .subbulk__stepper {
+    width: 100%;
     max-width: 100%;
+  }
+
+  .subbulk__stepper button {
+    width: 44px;
+    flex: 0 0 44px;
+  }
+
+  .subbulk__stepper input {
+    width: auto;
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  .subbulk__total-box {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .subbulk__portal-link {
+    min-height: 46px;
+    text-align: center;
+  }
+
+  .subbulk__shipping,
+  .subbulk__hint,
+  .subbulk__cart-disclaimer {
+    font-size: 12px;
   }
 }

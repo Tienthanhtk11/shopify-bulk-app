@@ -186,6 +186,7 @@
     purchaseMode: allPlans.length ? "subscribe" : "onetime",
     quantity: 1,
     selectedPlanId: allPlans[0] ? allPlans[0].id : "",
+    planMenuOpen: false,
     variantId: String(cfg.variantId),
     discountMode: cfg.discountMode === "fixed" ? "fixed" : "percent",
     subscriptionPercent: Number(cfg.subscriptionPercent) || 0,
@@ -728,6 +729,16 @@
     updateMainPrice(d);
   }
 
+  if (!root.__subbulkOutsideClickBound) {
+    root.__subbulkOutsideClickBound = true;
+    root.ownerDocument.addEventListener("click", function (event) {
+      if (!state.planMenuOpen) return;
+      if (root.contains(event.target)) return;
+      state.planMenuOpen = false;
+      render();
+    });
+  }
+
   function updateMainPrice(d) {
     var hook = document.querySelector("[data-subbulk-main-price]");
     if (!hook || !d.tier) return;
@@ -782,6 +793,7 @@
           subPricing.subscriptionFromShopify,
         )
       : "";
+    var activePlanLabel = activePlan ? planTitle(activePlan) : "Select a plan";
 
     var subscribeCard = "";
     if (allPlans.length > 0) {
@@ -796,13 +808,18 @@
         .map(function (plan) {
           var selected = plan.id === (state.selectedPlanId || allPlans[0].id);
           return (
-            "<option value=\"" +
+            '<button type="button" class="subbulk__deliver-option' +
+            (selected ? ' subbulk__deliver-option--active' : '') +
+            '" data-subbulk-plan-option="' +
             escapeAttr(plan.id) +
-            "\"" +
-            (selected ? " selected" : "") +
-            ">" +
+            '" role="option" aria-selected="' +
+            (selected ? "true" : "false") +
+            '">' +
+            '<span class="subbulk__deliver-option-label">' +
             escapeHtml(planTitle(plan)) +
-            "</option>"
+            "</span>" +
+            (selected ? '<span class="subbulk__deliver-option-check" aria-hidden="true">✓</span>' : "") +
+            "</button>"
           );
         })
         .join("");
@@ -812,9 +829,17 @@
           '<span class="subbulk__deliver-label">' +
           escapeHtml(cfg.planSelectorLabel || "Deliver every") +
           "</span>" +
-          '<select class="subbulk-js-plan-select subbulk__deliver-select">' +
-          planOptions +
-          "</select>" +
+          '<div class="subbulk__deliver-menu" data-subbulk-plan-menu>' +
+          '<button type="button" class="subbulk-js-plan-toggle subbulk__deliver-toggle" aria-haspopup="listbox" aria-expanded="' +
+          (state.planMenuOpen ? "true" : "false") +
+          '">' +
+          '<span class="subbulk__deliver-toggle-label">' +
+          escapeHtml(activePlanLabel) +
+          '</span><span class="subbulk__deliver-chevron" aria-hidden="true">▾</span></button>' +
+          (state.planMenuOpen
+            ? '<div class="subbulk__deliver-options" role="listbox">' + planOptions + "</div>"
+            : "") +
+          "</div>" +
           "</div>"
         : "";
 
@@ -994,24 +1019,37 @@
     root.querySelectorAll("[data-subbulk-mode]").forEach(function (lbl) {
       lbl.addEventListener("click", function (e) {
         /* Don't re-trigger when clicking the dropdown itself */
-        if (e.target.tagName === "SELECT" || e.target.tagName === "OPTION") return;
+        if (e.target && e.target.closest && e.target.closest("[data-subbulk-plan-menu]")) return;
         var m = lbl.getAttribute("data-subbulk-mode");
         state.purchaseMode = m === "subscribe" ? "subscribe" : "onetime";
         if (state.purchaseMode === "subscribe" && !state.selectedPlanId && allPlans.length) {
           state.selectedPlanId = allPlans[0].id;
         }
+        state.planMenuOpen = false;
         render();
       });
     });
-    /* Plan dropdown inside subscribe card */
-    var planSelect = root.querySelector(".subbulk-js-plan-select");
-    if (planSelect) {
-      planSelect.addEventListener("change", function () {
-        state.selectedPlanId = planSelect.value;
+    var planToggle = root.querySelector(".subbulk-js-plan-toggle");
+    if (planToggle) {
+      planToggle.addEventListener("click", function (event) {
+        event.preventDefault();
+        event.stopPropagation();
         state.purchaseMode = "subscribe";
+        state.planMenuOpen = !state.planMenuOpen;
         render();
       });
     }
+
+    root.querySelectorAll("[data-subbulk-plan-option]").forEach(function (optionButton) {
+      optionButton.addEventListener("click", function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        state.selectedPlanId = optionButton.getAttribute("data-subbulk-plan-option") || state.selectedPlanId;
+        state.purchaseMode = "subscribe";
+        state.planMenuOpen = false;
+        render();
+      });
+    });
     var qty = root.querySelector(".subbulk-js-qty");
     var minus = root.querySelector(".subbulk-js-minus");
     var plus = root.querySelector(".subbulk-js-plus");

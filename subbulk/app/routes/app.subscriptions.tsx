@@ -23,6 +23,7 @@ import {
   type SubscriptionContractRow,
   type SubscriptionContractStatus,
 } from "../models/subscription-contracts.server";
+import { useEffect } from "react";
 
 type StatusFilter = "ALL" | SubscriptionContractStatus;
 
@@ -96,6 +97,16 @@ export default function SubscriptionsPage() {
   const [status, setStatus] = useState<StatusFilter>("ALL");
   const [query, setQuery] = useState("");
   const [sortBy, setSortBy] = useState("NEXT_BILLING_DESC");
+  const [pageSize, setPageSize] = useState("10");
+  const [currentPage, setCurrentPage] = useState(1);
+  const statusSnapshotCount =
+    status === "ALL"
+      ? rows.length
+      : status === "ACTIVE"
+        ? counts.active
+        : status === "PAUSED"
+          ? counts.paused
+          : counts.cancelled;
 
   const filteredRows = useMemo(() => {
     const next = rows
@@ -118,6 +129,25 @@ export default function SubscriptionsPage() {
 
     return next;
   }, [query, rows, sortBy, status]);
+
+  const pageSizeValue = Number(pageSize);
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSizeValue));
+  const pageStartIndex = filteredRows.length === 0 ? 0 : (currentPage - 1) * pageSizeValue + 1;
+  const pageEndIndex = Math.min(currentPage * pageSizeValue, filteredRows.length);
+  const paginatedRows = useMemo(
+    () => filteredRows.slice((currentPage - 1) * pageSizeValue, currentPage * pageSizeValue),
+    [currentPage, filteredRows, pageSizeValue],
+  );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [pageSize, query, sortBy, status]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   return (
     <Page>
@@ -230,6 +260,18 @@ export default function SubscriptionsPage() {
                 placeholder="Search subscriptions"
               />
               <Select
+                label="Records per page"
+                labelHidden
+                value={pageSize}
+                onChange={setPageSize}
+                options={[
+                  { label: "Show 10 per page", value: "10" },
+                  { label: "Show 25 per page", value: "25" },
+                  { label: "Show 50 per page", value: "50" },
+                  { label: "Show 100 per page", value: "100" },
+                ]}
+              />
+              <Select
                 label="Sort"
                 labelHidden
                 value={sortBy}
@@ -239,16 +281,6 @@ export default function SubscriptionsPage() {
                   { label: "Newest created first", value: "CREATED_DESC" },
                 ]}
               />
-              <Card>
-                <InlineStack align="space-between">
-                  <Text as="p" variant="bodyMd">
-                    Showing {filteredRows.length}
-                  </Text>
-                  <Text as="p" variant="bodySm" tone="subdued">
-                    Latest 100 per status
-                  </Text>
-                </InlineStack>
-              </Card>
             </InlineGrid>
 
             {filteredRows.length === 0 ? (
@@ -260,7 +292,20 @@ export default function SubscriptionsPage() {
               </EmptyState>
             ) : (
               <BlockStack gap="300">
-                {filteredRows.map((row) => (
+                <InlineStack align="space-between" blockAlign="center">
+                  <Text as="p" variant="bodySm" tone="subdued">
+                    Showing {pageStartIndex}-{pageEndIndex} of {filteredRows.length}
+                  </Text>
+                  <Text as="p" variant="bodySm" tone="subdued">
+                    {query.trim()
+                      ? `Filtered from ${status === "ALL" ? "the current Shopify snapshot" : `${status.toLowerCase()} subscriptions in the current Shopify snapshot`}`
+                      : status === "ALL"
+                        ? "Current Shopify snapshot"
+                        : `${status.charAt(0)}${status.slice(1).toLowerCase()} subscriptions in the current Shopify snapshot`}
+                  </Text>
+                </InlineStack>
+
+                {paginatedRows.map((row) => (
                   <Card key={row.id}>
                     <InlineGrid columns={{ xs: 1, md: "2fr 1fr 1fr" }} gap="400">
                       <BlockStack gap="100">
@@ -312,6 +357,26 @@ export default function SubscriptionsPage() {
                     </InlineGrid>
                   </Card>
                 ))}
+
+                <InlineStack align="space-between" blockAlign="center">
+                  <Text as="p" variant="bodySm" tone="subdued">
+                    Page {currentPage} of {totalPages}
+                  </Text>
+                  <InlineStack gap="200">
+                    <Button
+                      disabled={currentPage <= 1}
+                      onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                    >
+                      Previous
+                    </Button>
+                    <Button
+                      disabled={currentPage >= totalPages}
+                      onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                    >
+                      Next
+                    </Button>
+                  </InlineStack>
+                </InlineStack>
               </BlockStack>
             )}
           </BlockStack>

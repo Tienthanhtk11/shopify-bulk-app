@@ -13,6 +13,7 @@ import { getAdminPlanDefinitionByKey, listAdminPlanDefinitions } from "../servic
 import { FEATURE_LABELS } from "../services/entitlements.shared";
 import { resolveEntitlements } from "../services/entitlements.server";
 import { requireInternalAdminUser } from "../services/internal-admin-portal.server";
+import { isExpiredMerchantPlan } from "../services/merchant-plan-timeline.shared";
 
 export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   await requireInternalAdminUser(request);
@@ -102,6 +103,7 @@ export default function InternalAdminMerchantDetailPage() {
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
+  const isCurrentPlanExpired = isExpiredMerchantPlan(currentPlan);
   const enabledFeatures = Object.entries(entitlements.features).filter(([, enabled]) => enabled);
   const noteFormRef = useRef<HTMLFormElement | null>(null);
   const [toast, setToast] = useState<{ tone: "success" | "error"; message: string; key: number } | null>(null);
@@ -160,6 +162,7 @@ export default function InternalAdminMerchantDetailPage() {
               <span style={{ ...styles.badge, ...styles.badgePlan }}>
                 PLAN: {(currentPlan?.planName || planCatalog?.name || "Free").toUpperCase()}
               </span>
+              {isCurrentPlanExpired ? <span style={{ ...styles.badge, ...styles.badgeExpired }}>EXPIRED</span> : null}
               <span style={styles.merchantId}>ID: {merchant.shopGid || merchant.id}</span>
             </div>
           </div>
@@ -377,6 +380,16 @@ export default function InternalAdminMerchantDetailPage() {
                 <span style={styles.snapshotLabel}>Access State</span>
                 <strong style={styles.snapshotValue}>{entitlements.hasActivePlanAccess ? "Allowed" : "Blocked"}</strong>
               </div>
+              <div>
+                <span style={styles.snapshotLabel}>Current Period End</span>
+                <strong style={styles.snapshotValue}>
+                  {currentPlan?.currentPeriodEndAt ? formatDate(currentPlan.currentPeriodEndAt) : "Not synced yet"}
+                </strong>
+              </div>
+              <div>
+                <span style={styles.snapshotLabel}>Plan Purchased</span>
+                <strong style={styles.snapshotValue}>{currentPlan?.activatedAt ? formatDate(currentPlan.activatedAt) : "Unknown"}</strong>
+              </div>
             </div>
           </section>
 
@@ -419,8 +432,14 @@ export default function InternalAdminMerchantDetailPage() {
                     <p style={styles.feedMeta}>
                       {plan.planKey} · {plan.billingInterval || "unknown interval"}
                     </p>
+                    {plan.currentPeriodEndAt ? (
+                      <p style={styles.feedNote}>Current period end: {formatDate(plan.currentPeriodEndAt)}</p>
+                    ) : null}
                   </div>
-                  <span style={styles.feedTime}>{plan.status}</span>
+                  <div style={styles.planHistoryStatus}>
+                    <span style={styles.feedTime}>{plan.status}</span>
+                    {isExpiredMerchantPlan(plan) ? <span style={{ ...styles.badge, ...styles.badgeExpired }}>EXPIRED</span> : null}
+                  </div>
                 </div>
               ))}
             </div>
@@ -489,6 +508,7 @@ const styles: Record<string, React.CSSProperties> = {
   badge: { display: "inline-flex", alignItems: "center", justifyContent: "center", padding: "4px 8px", borderRadius: "4px", fontFamily: '"Space Grotesk", sans-serif', fontSize: "10px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.14em" },
   badgeActive: { background: "rgba(83,212,200,0.12)", color: "#73f1e4" },
   badgePlan: { background: "rgba(84,141,255,0.12)", color: "#afc6ff" },
+  badgeExpired: { background: "rgba(147,0,10,0.22)", color: "#ffb4ab" },
   merchantId: { color: "#859399", fontFamily: '"Space Grotesk", sans-serif', fontSize: "10px", letterSpacing: "0.12em", textTransform: "uppercase" },
   headerActions: { display: "flex", gap: "12px" },
   secondaryButton: { display: "inline-flex", alignItems: "center", justifyContent: "center", border: "1px solid rgba(133,147,153,0.24)", background: "#171f33", color: "#dae2fd", padding: "12px 16px", fontFamily: '"Space Grotesk", sans-serif', fontSize: "11px", textTransform: "uppercase", letterSpacing: "0.16em", cursor: "pointer" },
@@ -538,6 +558,7 @@ const styles: Record<string, React.CSSProperties> = {
   primaryWideButton: { width: "100%", border: 0, background: "linear-gradient(135deg, #3cf3ff, #00d6e1)", color: "#00363a", padding: "12px 16px", fontFamily: '"Space Grotesk", sans-serif', fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.16em", cursor: "pointer" },
   compactList: { display: "grid", gap: "10px" },
   compactRow: { display: "flex", justifyContent: "space-between", alignItems: "start", gap: "12px", paddingBottom: "10px", borderBottom: "1px solid rgba(60,73,78,0.08)" },
+  planHistoryStatus: { display: "grid", justifyItems: "end", gap: "8px" },
   feedList: { display: "grid", gap: "12px" },
   feedRow: { display: "flex", justifyContent: "space-between", alignItems: "start", gap: "16px", paddingBottom: "12px", borderBottom: "1px solid rgba(60,73,78,0.08)" },
   feedTitle: { margin: 0, color: "#dae2fd", fontSize: "13px", fontWeight: 600 },

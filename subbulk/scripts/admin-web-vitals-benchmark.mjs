@@ -74,7 +74,10 @@ function parseBoolean(value, fallback) {
 }
 
 function toNumber(value, fallback) {
-  const parsed = Number(value);
+  if (value == null) return fallback;
+  const normalized = String(value).trim();
+  if (!normalized) return fallback;
+  const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
@@ -294,6 +297,16 @@ async function main() {
   const outputDir = getEnv('SHOPIFY_BENCH_OUTPUT_DIR', path.join(process.cwd(), 'document', 'benchmark-results'));
   const userDataDir = getEnv('SHOPIFY_BENCH_USER_DATA_DIR', path.join(process.cwd(), '.bench', 'chrome-profile'));
   const executablePath = getEnv('PUPPETEER_EXECUTABLE_PATH') || undefined;
+
+  if (iterations <= 0) {
+    throw new Error(`SHOPIFY_BENCH_ITERATIONS must be greater than 0. Received: ${iterations}`);
+  }
+
+  if (waitAfterLoadMs < 0 || waitAfterInteractionMs < 0) {
+    throw new Error(
+      `Wait durations must be 0 or greater. Received load=${waitAfterLoadMs}, interaction=${waitAfterInteractionMs}`,
+    );
+  }
 
   await ensureDirectory(outputDir);
   await ensureDirectory(path.dirname(userDataDir));
