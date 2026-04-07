@@ -18,7 +18,7 @@ type MerchantSessionLike = {
 
 export async function assertMerchantWriteAccess(input: {
   session: MerchantSessionLike;
-  redirect: (url: string) => never;
+  redirect: (url: string) => Response;
   requiredFeature?: EntitledFeatureKey | null;
 }) {
   await upsertMerchantFromSession(input.session);

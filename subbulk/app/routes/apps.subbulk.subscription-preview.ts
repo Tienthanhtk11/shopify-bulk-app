@@ -1,7 +1,29 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { isValidAppProxyRequest } from "../lib/app-proxy-signature.server";
+import prisma from "../db.server";
+import { findRuleCoveringProduct } from "../models/subscription-rule.server";
 import { getOrCreateWidgetSettings } from "../models/widget-settings.server";
+
+async function hasSubbulkPlanForProduct(shop: string, productId: string | null) {
+  if (!productId || !/^\d+$/.test(productId)) return null;
+
+  const productGid = `gid://shopify/Product/${productId}`;
+  const rule = await findRuleCoveringProduct(shop, productGid);
+  if (rule?.defaultSellingPlanGid) return true;
+
+  const offer = await prisma.subscriptionOffer.findFirst({
+    where: {
+      shop,
+      productGid,
+      sellingPlanGroupGid: { not: null },
+      defaultSellingPlanGid: { not: null },
+    },
+    select: { id: true },
+  });
+
+  return Boolean(offer);
+}
 
 /**
  * App Proxy: storefront (cùng domain myshopify.com) fetch JSON preview %/fixed
@@ -20,6 +42,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
   const shop =
     new URL(request.url).searchParams.get("shop")?.toLowerCase().trim() ?? "";
+  const productId = new URL(request.url).searchParams.get("productId")?.trim() ?? null;
   if (!shop.endsWith(".myshopify.com")) {
     return json({ ok: false, error: "invalid_shop" }, { status: 400 });
   }
@@ -40,6 +63,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const isFixed = ws.defaultSubscriptionDiscountType === "FIXED";
   const num = Number(ws.defaultSubscriptionDiscountValue);
   const safe = Number.isFinite(num) && num >= 0 ? num : 0;
+  const productHasSubscriptionPlan = await hasSubbulkPlanForProduct(shop, productId);
   const preview = isFixed
     ? {
         discountMode: "fixed" as const,
@@ -57,6 +81,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       ok: true,
       preview,
       widgetSettings: {
+        showWidgetOnProductPage: ws.showWidgetOnProductPage,
+        productHasSubscriptionPlan,
         buyMoreHeading: ws.buyMoreHeading,
         purchaseOptionsLabel: ws.purchaseOptionsLabel,
         primaryColorHex: ws.primaryColorHex,

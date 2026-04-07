@@ -57,6 +57,7 @@
 
 <script type="application/json" id="subbulk-config-{{ block.id }}">
 {
+  "productId": {{ product.id | json }},
   "moneyFormat": {{ shop.money_format | json }},
   "currency": {{ cart.currency.iso_code | default: shop.currency | json }},
   "variantId": {{ product.selected_or_first_available_variant.id | json }},

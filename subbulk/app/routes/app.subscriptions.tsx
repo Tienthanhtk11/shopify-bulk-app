@@ -83,17 +83,37 @@ function matchesSearch(row: SubscriptionContractRow, query: string) {
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin } = await authenticate.admin(request);
-  const rows = await listAdminSubscriptionContracts(admin, 100);
-  const counts = buildSubscriptionStatusCounts(rows);
 
-  return {
-    rows,
-    counts,
-  };
+  try {
+    const rows = await listAdminSubscriptionContracts(admin, 100);
+    const counts = buildSubscriptionStatusCounts(rows);
+
+    return {
+      rows,
+      counts,
+      scopeError: null,
+    };
+  } catch (error) {
+    console.warn(
+      "[subscriptions] Failed to load subscription contracts:",
+      error instanceof Error ? error.message : error,
+    );
+
+    return {
+      rows: [],
+      counts: {
+        active: 0,
+        paused: 0,
+        cancelled: 0,
+      },
+      scopeError:
+        "Unable to load subscription data. The app may need additional API scopes (read_own_subscription_contracts) approved by Shopify.",
+    };
+  }
 };
 
 export default function SubscriptionsPage() {
-  const { rows, counts } = useLoaderData<typeof loader>();
+  const { rows, counts, scopeError } = useLoaderData<typeof loader>();
   const [status, setStatus] = useState<StatusFilter>("ALL");
   const [query, setQuery] = useState("");
   const [sortBy, setSortBy] = useState("NEXT_BILLING_DESC");
@@ -153,6 +173,19 @@ export default function SubscriptionsPage() {
     <Page>
       <TitleBar title="Subscriptions" />
       <BlockStack gap="500">
+        {scopeError ? (
+          <Card>
+            <BlockStack gap="100">
+              <Text as="h2" variant="headingMd">
+                Limited data
+              </Text>
+              <Text as="p" variant="bodyMd">
+                {scopeError}
+              </Text>
+            </BlockStack>
+          </Card>
+        ) : null}
+
         <InlineGrid columns={{ xs: 1, md: 4 }} gap="400">
           <Card>
             <BlockStack gap="100">
@@ -285,10 +318,14 @@ export default function SubscriptionsPage() {
 
             {filteredRows.length === 0 ? (
               <EmptyState
-                heading="No subscriptions found"
+                heading={scopeError ? "Subscription data unavailable" : "No subscriptions found"}
                 image="https://cdn.shopify.com/s/files/1/0262/4071/2726/files/emptystate-files.png"
               >
-                <p>Try another search keyword or switch to another status.</p>
+                <p>
+                  {scopeError
+                    ? "Approve the protected subscription scope in Shopify, then reinstall or reauthorize the app to load live contract data."
+                    : "Try another search keyword or switch to another status."}
+                </p>
               </EmptyState>
             ) : (
               <BlockStack gap="300">

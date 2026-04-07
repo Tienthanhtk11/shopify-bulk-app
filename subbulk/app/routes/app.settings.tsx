@@ -23,7 +23,7 @@ import {
 } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { useEffect, useState } from "react";
-import { productTemplateMainSectionBlockEditorUrl } from "../lib/theme-editor-url.server";
+import { FloatingToast } from "../lib/floating-toast";
 import {
   getOrCreateWidgetSettings,
   updateWidgetSettings,
@@ -42,7 +42,8 @@ const FONT_OPTIONS = [
 ];
 
 function parseCheckbox(fd: FormData, name: string) {
-  return fd.get(name) === "on";
+  const raw = String(fd.get(name) || "").trim().toLowerCase();
+  return raw === "on" || raw === "true" || raw === "1";
 }
 
 function normalizeHex(value: FormDataEntryValue | null, fallback: string) {
@@ -64,13 +65,8 @@ function clampInt(
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   const settings = await getOrCreateWidgetSettings(session.shop);
-  const apiKey = process.env.SHOPIFY_API_KEY ?? "";
-  const themeEditorUrl =
-    apiKey.length > 0
-      ? productTemplateMainSectionBlockEditorUrl(session.shop, apiKey, "buy-box")
-      : null;
 
-  return { settings, themeEditorUrl };
+  return { settings };
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
@@ -84,7 +80,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const intent = String(fd.get("intent") || "widget");
 
   if (intent === "enableBulkDiscount") {
-    const functionId = "019d30e2-4e04-76df-8966-381d63b24940";
+    const functionId = "019d5fb9-d719-7a6f-973a-f71f5521a6fb";
     if (!functionId) {
       return { ok: false, error: "Không tìm thấy Function ID môi trường. Hãy khởi động lại ứng dụng." };
     }
@@ -150,7 +146,24 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return { ok: true, discountSaved: true };
   }
 
+  if (intent === "toggleProductPageWidget") {
+    const current = await getOrCreateWidgetSettings(session.shop);
+    const nextValue = !current.showWidgetOnProductPage;
+    await updateWidgetSettings(session.shop, {
+      showWidgetOnProductPage: nextValue,
+    });
+    return {
+      ok: true,
+      intent,
+      discountSaved: false,
+      successMsg: nextValue
+        ? "Product page widget enabled."
+        : "Product page widget disabled.",
+    };
+  }
+
   await updateWidgetSettings(session.shop, {
+    showWidgetOnProductPage: parseCheckbox(fd, "showWidgetOnProductPage"),
     buyMoreHeading: String(fd.get("buyMoreHeading") || ""),
     purchaseOptionsLabel: String(fd.get("purchaseOptionsLabel") || ""),
     primaryColorHex: normalizeHex(fd.get("primaryColorHex"), "#D73C35"),
@@ -271,10 +284,14 @@ function PreviewCard({
 }
 
 export default function SettingsPage() {
-  const { settings, themeEditorUrl } = useLoaderData<typeof loader>();
+  const { settings } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const nav = useNavigation();
   const busy = nav.state !== "idle";
+  const [toast, setToast] = useState<{
+    message: string;
+    tone: "success" | "critical";
+  } | null>(null);
 
   const [defaultDiscType, setDefaultDiscType] = useState(
     settings.defaultSubscriptionDiscountType === "FIXED"
@@ -285,6 +302,9 @@ export default function SettingsPage() {
     settings.defaultSubscriptionDiscountValue,
   );
   const [buyMoreHeading, setBuyMoreHeading] = useState(settings.buyMoreHeading);
+  const [showWidgetOnProductPage, setShowWidgetOnProductPage] = useState(
+    settings.showWidgetOnProductPage,
+  );
   const [purchaseOptionsLabel, setPurchaseOptionsLabel] = useState(
     settings.purchaseOptionsLabel,
   );
@@ -328,6 +348,7 @@ export default function SettingsPage() {
         : "PERCENTAGE",
     );
     setDefaultDiscValue(settings.defaultSubscriptionDiscountValue);
+    setShowWidgetOnProductPage(settings.showWidgetOnProductPage);
     setBuyMoreHeading(settings.buyMoreHeading);
     setPurchaseOptionsLabel(settings.purchaseOptionsLabel);
     setPrimaryColorHex(settings.primaryColorHex);
@@ -344,50 +365,121 @@ export default function SettingsPage() {
     setFreeShippingNote(settings.freeShippingNote);
   }, [settings]);
 
+  useEffect(() => {
+    if (!actionData) return;
+    if ("error" in actionData && actionData.error) {
+      setToast({ message: actionData.error, tone: "critical" });
+      return;
+    }
+    if (!("ok" in actionData) || !actionData.ok) return;
+
+    const message =
+      "successMsg" in actionData && actionData.successMsg
+        ? actionData.successMsg
+        : "discountSaved" in actionData && actionData.discountSaved
+          ? "Default subscription discount saved."
+          : "Widget settings saved.";
+    setToast({ message, tone: "success" });
+  }, [actionData]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timeout = window.setTimeout(() => setToast(null), 2600);
+    return () => window.clearTimeout(timeout);
+  }, [toast]);
+
   return (
     <Page>
       <TitleBar title="Settings" />
       <BlockStack gap="500">
-        {actionData && "error" in actionData && actionData.error ? (
-          <Banner tone="critical" title="Lỗi">
-            <p>{actionData.error}</p>
-          </Banner>
-        ) : null}
-        {actionData && "ok" in actionData && actionData.ok ? (
-          <Banner
-            tone="success"
-            title={
-              "successMsg" in actionData && actionData.successMsg
-                ? actionData.successMsg
-                : "discountSaved" in actionData && actionData.discountSaved
-                ? "Đã lưu default subscription discount."
-                : "Đã lưu widget settings."
-            }
-          />
-        ) : null}
+        {toast ? <FloatingToast message={toast.message} tone={toast.tone} /> : null}
 
         <InlineGrid columns={{ xs: 1, md: "1.45fr 1fr" }} gap="400">
           <Card>
             <BlockStack gap="300">
               <InlineStack align="space-between" blockAlign="center">
-                <BlockStack gap="100">
-                  <Text as="h1" variant="headingLg">
-                    Widget styling
-                  </Text>
-                  <Text as="p" variant="bodyMd" tone="subdued">
-                    Quan ly text, mau sac, layout, va display rules cho widget
-                    storefront tu admin.
-                  </Text>
+                <BlockStack gap="200" inlineAlign="start">
+                  <BlockStack gap="300">
+                    <Text as="h1" variant="headingLg">
+                      Widget styling
+                    </Text>
+                    <Text as="p" variant="bodyMd" tone="subdued">
+                      Manage widget copy, colors, layout, and display behavior for
+                      your storefront directly from the admin.
+                    </Text>
+                    <InlineStack gap="300" blockAlign="center" wrap={false}>
+                      <Text as="span" variant="bodyMd" fontWeight="medium">
+                        Enable widget on product page:
+                      </Text>
+                      <Form method="post">
+                        <input type="hidden" name="intent" value="toggleProductPageWidget" />
+                        <button
+                          type="submit"
+                          disabled={busy}
+                          aria-pressed={showWidgetOnProductPage}
+                          aria-label={showWidgetOnProductPage ? "Disable widget on product page" : "Enable widget on product page"}
+                          style={{
+                            border: "1px solid #cbd5e1",
+                            borderRadius: 999,
+                            background: "#ffffff",
+                            minHeight: 40,
+                            padding: "6px 8px 6px 12px",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 12,
+                            cursor: busy ? "wait" : "pointer",
+                            boxShadow: "0 4px 12px rgba(15, 23, 42, 0.08)",
+                          }}
+                        >
+                          <span
+                            aria-hidden="true"
+                            style={{
+                              position: "relative",
+                              width: 42,
+                              height: 24,
+                              borderRadius: 999,
+                              background: showWidgetOnProductPage ? "#15803d" : "#cbd5e1",
+                              transition: "background 160ms ease",
+                              flexShrink: 0,
+                            }}
+                          >
+                            <span
+                              style={{
+                                position: "absolute",
+                                top: 3,
+                                left: showWidgetOnProductPage ? 21 : 3,
+                                width: 18,
+                                height: 18,
+                                borderRadius: "50%",
+                                background: "#ffffff",
+                                boxShadow: "0 1px 3px rgba(15, 23, 42, 0.24)",
+                                transition: "left 160ms ease",
+                              }}
+                            />
+                          </span>
+                          <span
+                            style={{
+                              fontSize: 14,
+                              fontWeight: 600,
+                              color: "#0f172a",
+                              lineHeight: 1,
+                            }}
+                          >
+                            {showWidgetOnProductPage ? "Disable" : "Enable"}
+                          </span>
+                        </button>
+                      </Form>
+                    </InlineStack>
+                  </BlockStack>
                 </BlockStack>
-                {themeEditorUrl ? (
-                  <Button url={themeEditorUrl} target="_blank" variant="primary">
-                    Open theme editor
-                  </Button>
-                ) : null}
               </InlineStack>
 
               <Form method="post">
                 <BlockStack gap="400">
+                  <input type="hidden" name="showWidgetOnProductPage" value={showWidgetOnProductPage ? "true" : "false"} />
+                  <input type="hidden" name="showSavingsBadge" value={showSavingsBadge ? "true" : "false"} />
+                  <input type="hidden" name="showCompareAtPrice" value={showCompareAtPrice ? "true" : "false"} />
+                  <input type="hidden" name="showSubscriptionDetails" value={showSubscriptionDetails ? "true" : "false"} />
                   <Card>
                     <BlockStack gap="300">
                       <Text as="h2" variant="headingMd">
@@ -486,34 +578,6 @@ export default function SettingsPage() {
                           />
                         </FormLayout.Group>
                       </FormLayout>
-                    </BlockStack>
-                  </Card>
-
-                  <Card>
-                    <BlockStack gap="300">
-                      <Text as="h2" variant="headingMd">
-                        Display options
-                      </Text>
-                      <BlockStack gap="200">
-                        <Checkbox
-                          label="Show savings badge"
-                          name="showSavingsBadge"
-                          checked={showSavingsBadge}
-                          onChange={setShowSavingsBadge}
-                        />
-                        <Checkbox
-                          label="Show compare-at price"
-                          name="showCompareAtPrice"
-                          checked={showCompareAtPrice}
-                          onChange={setShowCompareAtPrice}
-                        />
-                        <Checkbox
-                          label="Show subscription details"
-                          name="showSubscriptionDetails"
-                          checked={showSubscriptionDetails}
-                          onChange={setShowSubscriptionDetails}
-                        />
-                      </BlockStack>
                     </BlockStack>
                   </Card>
 
@@ -621,25 +685,44 @@ export default function SettingsPage() {
               </BlockStack>
             </Card>
 
-            <Card>
-              <BlockStack gap="200">
-                <Text as="h2" variant="headingMd">
-                  Backend Configuration (Bulk Pricing)
-                </Text>
-                <Text as="p" variant="bodySm" tone="subdued">
-                  Để tính năng Mua nhiều giảm giá hoạt động chính xác trong quá trình Checkout (kết hợp với Subscriptions), bạn cần kích hoạt Shopify Function của app.
-                  Nhấn nút bên dưới để tạo Automatic Discount gán với hệ thống.
-                </Text>
-                <Box paddingBlockStart="100">
-                  <Form method="post">
-                    <input type="hidden" name="intent" value="enableBulkDiscount" />
-                    <Button submit loading={busy}>
-                      Kích hoạt Bulk Discount (Backend)
-                    </Button>
-                  </Form>
-                </Box>
-              </BlockStack>
-            </Card>
+            <div
+              style={{
+                border: "2px solid #0f766e",
+                borderRadius: 16,
+                boxShadow: "0 14px 30px rgba(15, 118, 110, 0.12)",
+              }}
+            >
+              <Card>
+                <BlockStack gap="200">
+                  <InlineStack align="space-between" blockAlign="center">
+                    <Text as="h2" variant="headingMd">
+                      Backend Configuration (Bulk Pricing)
+                    </Text>
+                    <Box
+                      background="bg-surface-success"
+                      paddingInline="200"
+                      paddingBlock="100"
+                      borderRadius="200"
+                    >
+                      <Text as="span" variant="bodySm" tone="success">
+                        Required
+                      </Text>
+                    </Box>
+                  </InlineStack>
+                  <Text as="p" variant="bodySm" tone="subdued">
+                    Enable the app's Shopify Function so bulk pricing is applied at cart and checkout, including storefront orders that also use subscription selling plans.
+                  </Text>
+                  <Box paddingBlockStart="100">
+                    <Form method="post">
+                      <input type="hidden" name="intent" value="enableBulkDiscount" />
+                      <Button submit loading={busy} variant="primary">
+                        Enable Backend Bulk Pricing
+                      </Button>
+                    </Form>
+                  </Box>
+                </BlockStack>
+              </Card>
+            </div>
 
             <Card>
               <BlockStack gap="200">
@@ -651,18 +734,11 @@ export default function SettingsPage() {
                   buttons, so the storefront layout matches the preview and checkout
                   flow.
                 </Text>
-                <Box paddingBlockStart="100">
-                  {themeEditorUrl ? (
-                    <Button url={themeEditorUrl} target="_blank">
-                      Open product template editor
-                    </Button>
-                  ) : (
-                    <Text as="p" variant="bodySm" tone="subdued">
-                      Configure `SHOPIFY_API_KEY` to show the deep link to the theme
-                      editor.
-                    </Text>
-                  )}
-                </Box>
+                <Text as="p" variant="bodySm" tone="subdued">
+                  Add the SubBulk block from the theme editor inside your product
+                  information section when you want the widget to appear on the
+                  storefront.
+                </Text>
               </BlockStack>
             </Card>
           </BlockStack>

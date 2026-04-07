@@ -7,25 +7,43 @@ import {
   Box,
   Button,
   Card,
-  Checkbox,
   FormLayout,
   InlineStack,
+  Modal,
   Page,
   Text,
-  TextField,
 } from "@shopify/polaris";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
-  createDeletionRequest,
+  createAndProcessDeletionRequest,
   getLatestDeletionRequest,
   getMerchantByShopDomain,
+  recordMerchantEvent,
   upsertMerchantFromSession,
 } from "../models/merchant.server";
+import { FloatingToast } from "../lib/floating-toast";
 import { authenticate } from "../shopify.server";
 
 type ActionData =
-  | { ok: true; message: string }
+  | { ok: true; message: string; redirectUrl: string }
   | { ok: false; error: string };
+
+const APP_UNINSTALL_API_VERSION = "2025-07";
+
+const APP_UNINSTALL_MUTATION = `#graphql
+  mutation AppUninstall {
+    appUninstall {
+      app {
+        id
+        title
+      }
+      userErrors {
+        field
+        message
+      }
+    }
+  }
+`;
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
@@ -44,30 +62,89 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const { session } = await authenticate.admin(request);
   await upsertMerchantFromSession(session);
   const formData = await request.formData();
-  const confirmed = formData.get("confirmed") === "on";
-  const confirmText = String(formData.get("confirmText") || "").trim();
-  const expectedValues = [session.shop, "DELETE"];
+  const intent = String(formData.get("intent") || "").trim();
 
-  if (!confirmed) {
-    return { ok: false, error: "Ban can xac nhan rang hanh dong nay khong the hoan tac." } satisfies ActionData;
+  if (intent !== "delete_and_uninstall") {
+    return { ok: false, error: "Unsupported privacy action." } satisfies ActionData;
   }
 
-  if (!expectedValues.includes(confirmText)) {
-    return {
-      ok: false,
-      error: `Nhap chinh xac \"${session.shop}\" hoac \"DELETE\" de tiep tuc.`,
-    } satisfies ActionData;
-  }
-
-  await createDeletionRequest({
+  await createAndProcessDeletionRequest({
     shopDomain: session.shop,
     requestedBy: session.email ?? session.shop,
     source: "app.privacy",
   });
 
+  const accessToken = (session as { accessToken?: string | null }).accessToken ?? null;
+  if (!accessToken) {
+    return {
+      ok: false,
+      error: "Unable to uninstall app because the authenticated admin access token is unavailable.",
+    } satisfies ActionData;
+  }
+
+  let payload: any;
+  try {
+    const response = await fetch(
+      `https://${session.shop}/admin/api/${APP_UNINSTALL_API_VERSION}/graphql.json`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Shopify-Access-Token": accessToken,
+        },
+        body: JSON.stringify({ query: APP_UNINSTALL_MUTATION }),
+      },
+    );
+    payload = await response.json();
+  } catch (error) {
+    await recordMerchantEvent({
+      shopDomain: session.shop,
+      type: "merchant.app_uninstall.failed",
+      source: "app.privacy",
+      severity: "error",
+      payload: {
+        message: error instanceof Error ? error.message : "Unknown uninstall request error",
+      },
+    });
+
+    return {
+      ok: false,
+      error: "Data deletion completed, but the app uninstall request could not be sent to Shopify.",
+    } satisfies ActionData;
+  }
+
+  const rootErrors = Array.isArray(payload?.errors) ? payload.errors : [];
+  const uninstall = payload?.data?.appUninstall;
+  const userErrors = Array.isArray(uninstall?.userErrors) ? uninstall.userErrors : [];
+
+  if (rootErrors.length > 0 || userErrors.length > 0) {
+    const message = [
+      ...rootErrors.map((error: { message?: string }) => error.message || "Unknown GraphQL error"),
+      ...userErrors.map((error: { message?: string }) => error.message || "Unknown uninstall error"),
+    ][0] || "Unable to uninstall app after data deletion.";
+
+    await recordMerchantEvent({
+      shopDomain: session.shop,
+      type: "merchant.app_uninstall.failed",
+      source: "app.privacy",
+      severity: "error",
+      payload: { message },
+    });
+
+    return { ok: false, error: message } satisfies ActionData;
+  }
+
+  await recordMerchantEvent({
+    shopDomain: session.shop,
+    type: "merchant.app_uninstall.requested",
+    source: "app.privacy",
+    payload: { appId: uninstall?.app?.id ?? null },
+  });
+
   return {
     ok: true,
-    message: "Yeu cau xoa du lieu da duoc ghi nhan va dua vao hang doi xu ly. Metadata toi thieu ve install va billing van duoc giu lai.",
+    message: "App operational data deleted. App uninstall has been initiated. Redirecting back to Shopify admin.",
+    redirectUrl: `https://${session.shop}/admin/apps`,
   } satisfies ActionData;
 };
 
@@ -75,14 +152,39 @@ export default function PrivacyPage() {
   const { merchant, latestRequest, shop } = useLoaderData<typeof loader>();
   const actionData = useActionData<ActionData>();
   const navigation = useNavigation();
-  const [confirmed, setConfirmed] = useState(false);
-  const [confirmText, setConfirmText] = useState("");
+  const formRef = useRef<HTMLFormElement | null>(null);
+  const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+  const [toast, setToast] = useState<{
+    message: string;
+    tone: "success" | "critical";
+  } | null>(null);
   const isSubmitting = navigation.state === "submitting";
+
+  useEffect(() => {
+    if (!actionData) return;
+    setConfirmModalOpen(false);
+    if (!actionData.ok) {
+      setToast({ message: actionData.error, tone: "critical" });
+      return;
+    }
+    setToast({ message: actionData.message, tone: "success" });
+    if (typeof window === "undefined") return;
+
+    const targetWindow = window.top ?? window;
+    targetWindow.location.href = actionData.redirectUrl;
+  }, [actionData]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timeout = window.setTimeout(() => setToast(null), 2600);
+    return () => window.clearTimeout(timeout);
+  }, [toast]);
 
   return (
     <Page>
       <TitleBar title="Privacy & data deletion" />
       <BlockStack gap="500">
+        {toast ? <FloatingToast message={toast.message} tone={toast.tone} /> : null}
         <Card>
           <BlockStack gap="200">
             <Text as="h1" variant="headingLg">
@@ -96,13 +198,6 @@ export default function PrivacyPage() {
             </Text>
           </BlockStack>
         </Card>
-
-        {actionData ? (
-          <Banner tone={actionData.ok ? "success" : "critical"}>
-            <p>{actionData.ok ? actionData.message : actionData.error}</p>
-          </Banner>
-        ) : null}
-
         {latestRequest ? (
           <Card>
             <BlockStack gap="100">
@@ -150,23 +245,17 @@ export default function PrivacyPage() {
               </Text>
             </BlockStack>
 
-            <Form method="post">
+            <Form method="post" ref={formRef}>
               <FormLayout>
-                <Checkbox
-                  label="I understand that this action permanently deletes app operational data."
-                  checked={confirmed}
-                  onChange={setConfirmed}
-                  name="confirmed"
-                />
-                <TextField
-                  label={`Type ${shop} or DELETE to confirm`}
-                  autoComplete="off"
-                  value={confirmText}
-                  onChange={setConfirmText}
-                  name="confirmText"
-                />
+                <input type="hidden" name="intent" value="delete_and_uninstall" />
+                <Text as="p" variant="bodyMd">
+                  When you continue, SubBulk will permanently delete app operational data for this merchant and then uninstall itself from the store.
+                </Text>
+                <Text as="p" variant="bodySm" tone="subdued">
+                  Shopify will keep only the minimum uninstall metadata required by the platform. After confirmation, the app closes immediately and the uninstall webhook will finalize merchant status cleanup.
+                </Text>
                 <InlineStack align="end">
-                  <Button submit tone="critical" loading={isSubmitting}>
+                  <Button tone="critical" loading={isSubmitting} onClick={() => setConfirmModalOpen(true)}>
                     Request deletion of app-stored data
                   </Button>
                 </InlineStack>
@@ -174,6 +263,39 @@ export default function PrivacyPage() {
             </Form>
           </BlockStack>
         </Card>
+
+        <Modal
+          open={confirmModalOpen}
+          onClose={() => {
+            if (isSubmitting) return;
+            setConfirmModalOpen(false);
+          }}
+          title="Delete app data and uninstall app?"
+          primaryAction={{
+            content: "Delete data and uninstall",
+            destructive: true,
+            loading: isSubmitting,
+            onAction: () => formRef.current?.requestSubmit(),
+          }}
+          secondaryActions={[
+            {
+              content: "Cancel",
+              disabled: isSubmitting,
+              onAction: () => setConfirmModalOpen(false),
+            },
+          ]}
+        >
+          <Modal.Section>
+            <BlockStack gap="300">
+              <Text as="p" variant="bodyMd">
+                This action is irreversible. SubBulk will delete widget settings, widget-enabled products, subscription rules, subscription offers, and internal operational data for {merchant?.shopDomain ?? shop}.
+              </Text>
+              <Text as="p" variant="bodySm" tone="subdued">
+                If you confirm, the app will immediately request uninstall from Shopify after the deletion finishes.
+              </Text>
+            </BlockStack>
+          </Modal.Section>
+        </Modal>
       </BlockStack>
     </Page>
   );

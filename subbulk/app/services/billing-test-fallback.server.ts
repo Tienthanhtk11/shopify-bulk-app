@@ -1,5 +1,5 @@
 import type { AdminApiContext } from "@shopify/shopify-app-remix/server";
-import { recordMerchantEvent } from "../models/merchant.server";
+import { recordMerchantEvent, upsertMerchantFromSession } from "../models/merchant.server";
 import { getAdminPlanCatalogItem } from "./admin-plan-catalog.shared";
 import type { InternalPlanKey } from "./partner-billing.server";
 
@@ -101,6 +101,7 @@ export function buildManualTestSubscriptionInput(input: {
   appUrl: string;
   planKey: InternalPlanKey;
   billingInterval?: BillingTestFallbackInterval | string | null;
+  currencyCode?: string;
 }): ManualTestSubscriptionInput {
   const appUrl = String(input.appUrl || "").trim();
   if (!appUrl) {
@@ -112,6 +113,9 @@ export function buildManualTestSubscriptionInput(input: {
   }
 
   const plan = getAdminPlanCatalogItem(input.planKey);
+  if (!plan) {
+    throw new Error(`Plan definition not found for key: ${input.planKey}`);
+  }
   const interval = normalizeInterval(input.billingInterval);
   const intervalDetails = getIntervalDetails(interval);
   const amount = parsePriceAmount(plan[intervalDetails.priceField]);
@@ -131,7 +135,7 @@ export function buildManualTestSubscriptionInput(input: {
           appRecurringPricingDetails: {
             price: {
               amount,
-              currencyCode: "USD",
+              currencyCode: input.currencyCode || "USD",
             },
             interval: intervalDetails.shopifyInterval,
           },
@@ -152,10 +156,19 @@ export async function createManualTestSubscription(input: {
     throw new Error("Manual test billing fallback is disabled in this environment.");
   }
 
+  // Fetch or ensure merchant exists to get their currencyCode
+  const merchant = await recordMerchantEvent({
+    shopDomain: input.shopDomain,
+    type: "billing.fetch_context",
+    source: "billing.manual_test",
+    payload: { planKey: input.planKey }
+  }).then(() => upsertMerchantFromSession({ shop: input.shopDomain } as any));
+
   const variables = buildManualTestSubscriptionInput({
     appUrl: process.env.SHOPIFY_APP_URL || "",
     planKey: input.planKey,
     billingInterval: input.billingInterval,
+    currencyCode: merchant?.currencyCode || "USD",
   });
 
   const response = await input.admin.graphql(APP_SUBSCRIPTION_CREATE_MUTATION, { variables });

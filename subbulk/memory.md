@@ -324,3 +324,26 @@
    * result: exact production `PARTNER_PLAN_*_GIDS` still cannot be finalized from live data until a real managed-pricing subscription exists to inspect
    * latest validation after the Prisma loader fix: `npm run build` passed cleanly
    * one intermediate deploy briefly returned `502` because the single-path fix worked in source runtime but broke the bundled server; the follow-up dual-path fix was redeployed and production recovered (`/auth/login` -> `200`)
+43. Migration from Custom App to Partner App:
+    * root cause of 404 when switching plans: app was a Custom App (owned by a Shop), which cannot use Shopify Billing API or Managed Pricing
+    * the Partner App "BMG Bulk Subscription" already existed on Partners Dashboard (`dev.shopify.com`) with client_id `e55e1ee1368f8b7177af21807dd52826`
+    * updated `.env` and `shopify.app.toml` to use Partner App credentials instead of Custom App credentials (`e63acd707bf5ecdcda21c3c49633917e`)
+    * `SHOPIFY_MANAGED_PRICING_READY` set to `false` (requires App Store listing, not available pre-review)
+    * `SHOPIFY_BILLING_TEST_FALLBACK_ENABLED` set to `true` for dev store testing
+    * `SHOPIFY_MANAGED_PRICING_APP_HANDLE` corrected from `subscription-bulk-app-1` to `subscription-bulk-app`
+    * three protected scopes temporarily removed from `shopify.app.toml` (need Partner Dashboard approval):
+      - `read_own_subscription_contracts`
+      - `write_own_subscription_contracts`
+      - `read_customer_payment_methods`
+    * `extensions/sub-bulk-customer-account/shopify.extension.toml`: `network_access` set to `false` temporarily so version could be released (network access needs Shopify approval)
+    * `npx shopify app deploy` released version `subscription-bulk-app-4` successfully with correct URLs
+    * initial deploy attempts created versions 2 and 3 but could not release due to network_access requirement
+    * the old active version `bmg-bulk-subscription-1` had placeholder `example.com` URLs causing "Example Domain" error after install
+44. Billing page rewrite for self-service plan switching:
+    * rewrote `app/routes/app.billing.tsx` to support self-service plan changes via internal `MerchantPlan` snapshots
+    * flow: merchant clicks "Upgrade to Premium/Ultra" → system creates `MerchantPlan` record with `status: active` directly in DB
+    * bypasses Shopify Billing API entirely (suitable for Custom App or pre-review testing)
+    * records `billing.plan_changed.self_service` events for audit trail
+    * removed dependency on `billing-test-fallback.server.ts` (which requires `appSubscriptionCreate` API)
+    * downgrade from paid plans to Free also supported
+    * production Docker container rebuilt and deployed with new credentials

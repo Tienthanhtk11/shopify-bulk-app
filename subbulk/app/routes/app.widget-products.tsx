@@ -22,6 +22,7 @@ import {
 } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { useState, useCallback, useEffect, useMemo } from "react";
+import { FloatingToast } from "../lib/floating-toast";
 import { authenticate } from "../shopify.server";
 import { fetchProductBulkPricingJson } from "../lib/shopify-metafields.server";
 import {
@@ -232,6 +233,10 @@ export default function WidgetProductsPage() {
   const actionData = useActionData<typeof action>();
   const nav = useNavigation();
   const busy = nav.state !== "idle";
+  const [toast, setToast] = useState<{
+    message: string;
+    tone: "success" | "critical";
+  } | null>(null);
 
   const [selectedGids, setSelectedGids] = useState<string[]>([]);
   const [bulkJson, setBulkJson] = useState(bulkPricingJson);
@@ -256,6 +261,23 @@ export default function WidgetProductsPage() {
       setSelectedGids([]);
     }
   }, [actionData]);
+
+  useEffect(() => {
+    if (!actionData) return;
+    if ("message" in actionData && typeof actionData.message === "string") {
+      setToast({ message: actionData.message, tone: "success" });
+      return;
+    }
+    if ("error" in actionData && actionData.error) {
+      setToast({ message: actionData.error, tone: "critical" });
+    }
+  }, [actionData]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timeout = window.setTimeout(() => setToast(null), 2600);
+    return () => window.clearTimeout(timeout);
+  }, [toast]);
 
   const pickProducts = useCallback(() => {
     const w = window as unknown as {
@@ -306,21 +328,10 @@ export default function WidgetProductsPage() {
     <Page>
       <TitleBar title="Sản phẩm dùng widget" />
       <BlockStack gap="400">
-        {actionData && "error" in actionData && actionData.error ? (
-          <Banner tone="critical" title="Lỗi">
-            <p>{actionData.error}</p>
-          </Banner>
-        ) : null}
-        {actionData &&
-        "ok" in actionData &&
-        actionData.ok &&
-        "message" in actionData &&
-        typeof actionData.message === "string" ? (
-          <Banner tone="success" title={actionData.message} />
-        ) : null}
+        {toast ? <FloatingToast message={toast.message} tone={toast.tone} /> : null}
 
         {entrySource === "discounts" ? (
-          <Banner tone="success" title="Discounts admin opened this screen">
+          <Banner tone="info" title="Discounts admin opened this screen">
             <BlockStack gap="200">
               <Text as="p" variant="bodyMd">
                 Use this page to configure the products that participate in SubBulk quantity discounts and to maintain the bulk pricing JSON that the storefront widget reads.

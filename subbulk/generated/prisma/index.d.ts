@@ -12057,6 +12057,7 @@ export namespace Prisma {
   export type WidgetSettingsMinAggregateOutputType = {
     id: string | null
     shop: string | null
+    showWidgetOnProductPage: boolean | null
     buyMoreHeading: string | null
     purchaseOptionsLabel: string | null
     primaryColorHex: string | null
@@ -12080,6 +12081,7 @@ export namespace Prisma {
   export type WidgetSettingsMaxAggregateOutputType = {
     id: string | null
     shop: string | null
+    showWidgetOnProductPage: boolean | null
     buyMoreHeading: string | null
     purchaseOptionsLabel: string | null
     primaryColorHex: string | null
@@ -12103,6 +12105,7 @@ export namespace Prisma {
   export type WidgetSettingsCountAggregateOutputType = {
     id: number
     shop: number
+    showWidgetOnProductPage: number
     buyMoreHeading: number
     purchaseOptionsLabel: number
     primaryColorHex: number
@@ -12138,6 +12141,7 @@ export namespace Prisma {
   export type WidgetSettingsMinAggregateInputType = {
     id?: true
     shop?: true
+    showWidgetOnProductPage?: true
     buyMoreHeading?: true
     purchaseOptionsLabel?: true
     primaryColorHex?: true
@@ -12161,6 +12165,7 @@ export namespace Prisma {
   export type WidgetSettingsMaxAggregateInputType = {
     id?: true
     shop?: true
+    showWidgetOnProductPage?: true
     buyMoreHeading?: true
     purchaseOptionsLabel?: true
     primaryColorHex?: true
@@ -12184,6 +12189,7 @@ export namespace Prisma {
   export type WidgetSettingsCountAggregateInputType = {
     id?: true
     shop?: true
+    showWidgetOnProductPage?: true
     buyMoreHeading?: true
     purchaseOptionsLabel?: true
     primaryColorHex?: true
@@ -12294,6 +12300,7 @@ export namespace Prisma {
   export type WidgetSettingsGroupByOutputType = {
     id: string
     shop: string
+    showWidgetOnProductPage: boolean
     buyMoreHeading: string
     purchaseOptionsLabel: string
     primaryColorHex: string
@@ -12336,6 +12343,7 @@ export namespace Prisma {
   export type WidgetSettingsSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
     id?: boolean
     shop?: boolean
+    showWidgetOnProductPage?: boolean
     buyMoreHeading?: boolean
     purchaseOptionsLabel?: boolean
     primaryColorHex?: boolean
@@ -12359,6 +12367,7 @@ export namespace Prisma {
   export type WidgetSettingsSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
     id?: boolean
     shop?: boolean
+    showWidgetOnProductPage?: boolean
     buyMoreHeading?: boolean
     purchaseOptionsLabel?: boolean
     primaryColorHex?: boolean
@@ -12382,6 +12391,7 @@ export namespace Prisma {
   export type WidgetSettingsSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
     id?: boolean
     shop?: boolean
+    showWidgetOnProductPage?: boolean
     buyMoreHeading?: boolean
     purchaseOptionsLabel?: boolean
     primaryColorHex?: boolean
@@ -12405,6 +12415,7 @@ export namespace Prisma {
   export type WidgetSettingsSelectScalar = {
     id?: boolean
     shop?: boolean
+    showWidgetOnProductPage?: boolean
     buyMoreHeading?: boolean
     purchaseOptionsLabel?: boolean
     primaryColorHex?: boolean
@@ -12425,7 +12436,7 @@ export namespace Prisma {
     updatedAt?: boolean
   }
 
-  export type WidgetSettingsOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "shop" | "buyMoreHeading" | "purchaseOptionsLabel" | "primaryColorHex" | "accentGreenHex" | "fontFamily" | "borderRadiusPx" | "borderThicknessPx" | "showSavingsBadge" | "showCompareAtPrice" | "showSubscriptionDetails" | "customCssEnabled" | "customCss" | "subscriptionFooter" | "freeShippingNote" | "defaultSubscriptionDiscountType" | "defaultSubscriptionDiscountValue" | "createdAt" | "updatedAt", ExtArgs["result"]["widgetSettings"]>
+  export type WidgetSettingsOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "shop" | "showWidgetOnProductPage" | "buyMoreHeading" | "purchaseOptionsLabel" | "primaryColorHex" | "accentGreenHex" | "fontFamily" | "borderRadiusPx" | "borderThicknessPx" | "showSavingsBadge" | "showCompareAtPrice" | "showSubscriptionDetails" | "customCssEnabled" | "customCss" | "subscriptionFooter" | "freeShippingNote" | "defaultSubscriptionDiscountType" | "defaultSubscriptionDiscountValue" | "createdAt" | "updatedAt", ExtArgs["result"]["widgetSettings"]>
 
   export type $WidgetSettingsPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     name: "WidgetSettings"
@@ -12433,6 +12444,7 @@ export namespace Prisma {
     scalars: $Extensions.GetPayloadResult<{
       id: string
       shop: string
+      showWidgetOnProductPage: boolean
       buyMoreHeading: string
       purchaseOptionsLabel: string
       primaryColorHex: string
@@ -12882,6 +12894,7 @@ export namespace Prisma {
   interface WidgetSettingsFieldRefs {
     readonly id: FieldRef<"WidgetSettings", 'String'>
     readonly shop: FieldRef<"WidgetSettings", 'String'>
+    readonly showWidgetOnProductPage: FieldRef<"WidgetSettings", 'Boolean'>
     readonly buyMoreHeading: FieldRef<"WidgetSettings", 'String'>
     readonly purchaseOptionsLabel: FieldRef<"WidgetSettings", 'String'>
     readonly primaryColorHex: FieldRef<"WidgetSettings", 'String'>
@@ -14443,6 +14456,7 @@ export namespace Prisma {
   export const WidgetSettingsScalarFieldEnum: {
     id: 'id',
     shop: 'shop',
+    showWidgetOnProductPage: 'showWidgetOnProductPage',
     buyMoreHeading: 'buyMoreHeading',
     purchaseOptionsLabel: 'purchaseOptionsLabel',
     primaryColorHex: 'primaryColorHex',
@@ -15412,6 +15426,7 @@ export namespace Prisma {
     NOT?: WidgetSettingsWhereInput | WidgetSettingsWhereInput[]
     id?: StringFilter<"WidgetSettings"> | string
     shop?: StringFilter<"WidgetSettings"> | string
+    showWidgetOnProductPage?: BoolFilter<"WidgetSettings"> | boolean
     buyMoreHeading?: StringFilter<"WidgetSettings"> | string
     purchaseOptionsLabel?: StringFilter<"WidgetSettings"> | string
     primaryColorHex?: StringFilter<"WidgetSettings"> | string
@@ -15435,6 +15450,7 @@ export namespace Prisma {
   export type WidgetSettingsOrderByWithRelationInput = {
     id?: SortOrder
     shop?: SortOrder
+    showWidgetOnProductPage?: SortOrder
     buyMoreHeading?: SortOrder
     purchaseOptionsLabel?: SortOrder
     primaryColorHex?: SortOrder
@@ -15461,6 +15477,7 @@ export namespace Prisma {
     AND?: WidgetSettingsWhereInput | WidgetSettingsWhereInput[]
     OR?: WidgetSettingsWhereInput[]
     NOT?: WidgetSettingsWhereInput | WidgetSettingsWhereInput[]
+    showWidgetOnProductPage?: BoolFilter<"WidgetSettings"> | boolean
     buyMoreHeading?: StringFilter<"WidgetSettings"> | string
     purchaseOptionsLabel?: StringFilter<"WidgetSettings"> | string
     primaryColorHex?: StringFilter<"WidgetSettings"> | string
@@ -15484,6 +15501,7 @@ export namespace Prisma {
   export type WidgetSettingsOrderByWithAggregationInput = {
     id?: SortOrder
     shop?: SortOrder
+    showWidgetOnProductPage?: SortOrder
     buyMoreHeading?: SortOrder
     purchaseOptionsLabel?: SortOrder
     primaryColorHex?: SortOrder
@@ -15515,6 +15533,7 @@ export namespace Prisma {
     NOT?: WidgetSettingsScalarWhereWithAggregatesInput | WidgetSettingsScalarWhereWithAggregatesInput[]
     id?: StringWithAggregatesFilter<"WidgetSettings"> | string
     shop?: StringWithAggregatesFilter<"WidgetSettings"> | string
+    showWidgetOnProductPage?: BoolWithAggregatesFilter<"WidgetSettings"> | boolean
     buyMoreHeading?: StringWithAggregatesFilter<"WidgetSettings"> | string
     purchaseOptionsLabel?: StringWithAggregatesFilter<"WidgetSettings"> | string
     primaryColorHex?: StringWithAggregatesFilter<"WidgetSettings"> | string
@@ -16566,6 +16585,7 @@ export namespace Prisma {
   export type WidgetSettingsCreateInput = {
     id?: string
     shop: string
+    showWidgetOnProductPage?: boolean
     buyMoreHeading?: string
     purchaseOptionsLabel?: string
     primaryColorHex?: string
@@ -16589,6 +16609,7 @@ export namespace Prisma {
   export type WidgetSettingsUncheckedCreateInput = {
     id?: string
     shop: string
+    showWidgetOnProductPage?: boolean
     buyMoreHeading?: string
     purchaseOptionsLabel?: string
     primaryColorHex?: string
@@ -16612,6 +16633,7 @@ export namespace Prisma {
   export type WidgetSettingsUpdateInput = {
     id?: StringFieldUpdateOperationsInput | string
     shop?: StringFieldUpdateOperationsInput | string
+    showWidgetOnProductPage?: BoolFieldUpdateOperationsInput | boolean
     buyMoreHeading?: StringFieldUpdateOperationsInput | string
     purchaseOptionsLabel?: StringFieldUpdateOperationsInput | string
     primaryColorHex?: StringFieldUpdateOperationsInput | string
@@ -16635,6 +16657,7 @@ export namespace Prisma {
   export type WidgetSettingsUncheckedUpdateInput = {
     id?: StringFieldUpdateOperationsInput | string
     shop?: StringFieldUpdateOperationsInput | string
+    showWidgetOnProductPage?: BoolFieldUpdateOperationsInput | boolean
     buyMoreHeading?: StringFieldUpdateOperationsInput | string
     purchaseOptionsLabel?: StringFieldUpdateOperationsInput | string
     primaryColorHex?: StringFieldUpdateOperationsInput | string
@@ -16658,6 +16681,7 @@ export namespace Prisma {
   export type WidgetSettingsCreateManyInput = {
     id?: string
     shop: string
+    showWidgetOnProductPage?: boolean
     buyMoreHeading?: string
     purchaseOptionsLabel?: string
     primaryColorHex?: string
@@ -16681,6 +16705,7 @@ export namespace Prisma {
   export type WidgetSettingsUpdateManyMutationInput = {
     id?: StringFieldUpdateOperationsInput | string
     shop?: StringFieldUpdateOperationsInput | string
+    showWidgetOnProductPage?: BoolFieldUpdateOperationsInput | boolean
     buyMoreHeading?: StringFieldUpdateOperationsInput | string
     purchaseOptionsLabel?: StringFieldUpdateOperationsInput | string
     primaryColorHex?: StringFieldUpdateOperationsInput | string
@@ -16704,6 +16729,7 @@ export namespace Prisma {
   export type WidgetSettingsUncheckedUpdateManyInput = {
     id?: StringFieldUpdateOperationsInput | string
     shop?: StringFieldUpdateOperationsInput | string
+    showWidgetOnProductPage?: BoolFieldUpdateOperationsInput | boolean
     buyMoreHeading?: StringFieldUpdateOperationsInput | string
     purchaseOptionsLabel?: StringFieldUpdateOperationsInput | string
     primaryColorHex?: StringFieldUpdateOperationsInput | string
@@ -17449,6 +17475,7 @@ export namespace Prisma {
   export type WidgetSettingsCountOrderByAggregateInput = {
     id?: SortOrder
     shop?: SortOrder
+    showWidgetOnProductPage?: SortOrder
     buyMoreHeading?: SortOrder
     purchaseOptionsLabel?: SortOrder
     primaryColorHex?: SortOrder
@@ -17477,6 +17504,7 @@ export namespace Prisma {
   export type WidgetSettingsMaxOrderByAggregateInput = {
     id?: SortOrder
     shop?: SortOrder
+    showWidgetOnProductPage?: SortOrder
     buyMoreHeading?: SortOrder
     purchaseOptionsLabel?: SortOrder
     primaryColorHex?: SortOrder
@@ -17500,6 +17528,7 @@ export namespace Prisma {
   export type WidgetSettingsMinOrderByAggregateInput = {
     id?: SortOrder
     shop?: SortOrder
+    showWidgetOnProductPage?: SortOrder
     buyMoreHeading?: SortOrder
     purchaseOptionsLabel?: SortOrder
     primaryColorHex?: SortOrder

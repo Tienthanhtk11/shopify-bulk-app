@@ -1,6 +1,7 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import prisma from "../db.server";
 import { findRuleCoveringProduct } from "../models/subscription-rule.server";
+import { getOrCreateWidgetSettings } from "../models/widget-settings.server";
 
 /**
  * API công khai cho theme block cũ "Purchase Options Widget"
@@ -45,6 +46,23 @@ type LegacyOffer = {
   variantId: string | null;
   intervals: LegacyInterval[];
 };
+
+async function hasSubbulkPlanForProduct(shop: string, productGid: string) {
+  const rule = await findRuleCoveringProduct(shop, productGid);
+  if (rule?.defaultSellingPlanGid) return true;
+
+  const offer = await prisma.subscriptionOffer.findFirst({
+    where: {
+      shop,
+      productGid,
+      sellingPlanGroupGid: { not: null },
+      defaultSellingPlanGid: { not: null },
+    },
+    select: { id: true },
+  });
+
+  return Boolean(offer);
+}
 
 function mapOfferToLegacy(offer: {
   id: string;
@@ -133,9 +151,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const productGid = `gid://shopify/Product/${productId}`;
 
-  const widgetRow = await prisma.widgetSettings.findUnique({
-    where: { shop: shopDomain },
-  });
+  const widgetRow = await getOrCreateWidgetSettings(shopDomain);
 
   const rule = await findRuleCoveringProduct(shopDomain, productGid);
   let offers: LegacyOffer[] = [];
@@ -166,19 +182,28 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       .filter((o): o is LegacyOffer => o !== null);
   }
 
+  const productHasSubscriptionPlan =
+    offers.length > 0 || (await hasSubbulkPlanForProduct(shopDomain, productGid));
+
   return json({
     ok: true,
     shop: shopDomain,
     widgetSettings: {
-      isEnabled: true,
+      isEnabled:
+        widgetRow.showWidgetOnProductPage === true &&
+        productHasSubscriptionPlan === true,
+      showWidgetOnProductPage:
+        widgetRow.showWidgetOnProductPage === true &&
+        productHasSubscriptionPlan === true,
+      productHasSubscriptionPlan,
       subscriptionWidgetTitle:
-        widgetRow?.purchaseOptionsLabel ?? "Purchase options",
-      bulkPricingTableTitle: widgetRow?.buyMoreHeading ?? "Buy more, save more",
-      showSavingsBadge: true,
-      showCompareAtPrice: true,
-      showSubscriptionPricePreview: true,
-      customCssEnabled: false,
-      customCss: null,
+        widgetRow.purchaseOptionsLabel ?? "Purchase options",
+      bulkPricingTableTitle: widgetRow.buyMoreHeading ?? "Buy more, save more",
+      showSavingsBadge: widgetRow.showSavingsBadge,
+      showCompareAtPrice: widgetRow.showCompareAtPrice,
+      showSubscriptionPricePreview: widgetRow.showSubscriptionDetails,
+      customCssEnabled: widgetRow.customCssEnabled,
+      customCss: widgetRow.customCss || null,
     },
     publishedAt: null,
     revision: null,

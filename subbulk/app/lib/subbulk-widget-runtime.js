@@ -67,7 +67,22 @@
     }
   }
 
-  function findProductForm() {
+  function findProductForm(root) {
+    var scopes = [];
+    if (root) {
+      scopes.push(root.closest("product-info"));
+      scopes.push(root.closest(".product__info-container"));
+      scopes.push(root.closest(".product__column-sticky"));
+      scopes.push(root.closest(".product"));
+      scopes.push(root.closest(".shopify-section"));
+      scopes.push(root.parentElement);
+    }
+    for (var i = 0; i < scopes.length; i++) {
+      var scope = scopes[i];
+      if (!scope || !scope.querySelector) continue;
+      var scopedForm = scope.querySelector('form[action*="/cart/add"]');
+      if (scopedForm) return scopedForm;
+    }
     return document.querySelector('form[action*="/cart/add"]');
   }
 
@@ -80,6 +95,272 @@
       form.appendChild(i);
     }
     return i;
+  }
+
+  function findNativePurchaseOptionsScope(root) {
+    if (!root) return null;
+    return (
+      root.closest("product-info") ||
+      root.closest("product-form") ||
+      root.closest(".product__info-container") ||
+      root.closest(".product-form") ||
+      root.parentElement ||
+      document
+    );
+  }
+
+  function nodeTextIncludesPurchaseOptions(node) {
+    if (!node || !node.textContent) return false;
+    var text = String(node.textContent).replace(/\s+/g, " ").trim().toLowerCase();
+    if (!text) return false;
+    return (
+      text.indexOf("purchase options") !== -1 ||
+      text.indexOf("one-time purchase") !== -1 ||
+      text.indexOf("subscribe & save") !== -1 ||
+      text.indexOf("subscribe and save") !== -1
+    );
+  }
+
+  function nodeHasPurchaseOptionControls(node) {
+    if (!node || !node.querySelector) return false;
+    return Boolean(
+      node.querySelector(
+        [
+          'purchase-options',
+          'input[name*="purchase_option"]',
+          'input[name*="selling_plan"]:not([data-subbulk-owned="true"])',
+          'select[name="selling_plan"]',
+          '[data-plan-option-input]',
+          '[data-purchase-option]'
+        ].join(',')
+      )
+    );
+  }
+
+  function resolvePurchaseOptionsContainer(node, root) {
+    if (!node || node === root) return null;
+
+    var candidates = [
+      node.closest('purchase-options'),
+      node.closest('fieldset'),
+      node.closest('.product-form__input'),
+      node.closest('.product-form__group'),
+      node.closest('.product-form__buttons'),
+      node
+    ];
+
+    for (var i = 0; i < candidates.length; i++) {
+      var candidate = candidates[i];
+      if (!candidate) continue;
+      if (candidate === root || (root && root.contains(candidate))) continue;
+      if (candidate.hasAttribute && candidate.hasAttribute('data-subbulk-hidden-native-options')) {
+        continue;
+      }
+      if (nodeHasPurchaseOptionControls(candidate) || nodeTextIncludesPurchaseOptions(candidate)) {
+        return candidate;
+      }
+    }
+
+    return null;
+  }
+
+  function shouldHidePurchaseOptionsContainer(node, root) {
+    if (!node || node === root || (root && (root.contains(node) || node.contains(root)))) return false;
+    if (node.hasAttribute("data-subbulk-hidden-native-options")) return false;
+    if (!nodeHasPurchaseOptionControls(node) && !nodeTextIncludesPurchaseOptions(node)) return false;
+    return true;
+  }
+
+  function collectNativePurchaseOptionsContainers(scope, root) {
+    var containers = [];
+    if (!scope) return containers;
+
+    var selectorHits = scope.querySelectorAll(
+      [
+        'purchase-options',
+        '.product-form__input input[name*="purchase_option"]',
+        '.product-form__input input[name*="selling_plan"]:not([data-subbulk-owned="true"])',
+        '.product-form__input select[name="selling_plan"]',
+        '.product-form__input [data-plan-option-input]',
+        '.product-form__input [data-purchase-option]'
+      ].join(',')
+    );
+
+    selectorHits.forEach(function (node) {
+      var container = resolvePurchaseOptionsContainer(node, root);
+      if (shouldHidePurchaseOptionsContainer(container, root)) {
+        containers.push(container);
+      }
+    });
+
+    var textCandidates = scope.querySelectorAll(
+      '.product-form__input, .product-form__group, fieldset, purchase-options, label, legend, div'
+    );
+    textCandidates.forEach(function (node) {
+      if (!nodeTextIncludesPurchaseOptions(node)) return;
+      var container = resolvePurchaseOptionsContainer(node, root);
+      if (shouldHidePurchaseOptionsContainer(container, root)) {
+        containers.push(container);
+      }
+    });
+
+    return containers.filter(function (node, index, arr) {
+      return arr.indexOf(node) === index;
+    });
+  }
+
+  function hideNativePurchaseOptions(root) {
+    if (!root) return;
+    var scope = findNativePurchaseOptionsScope(root);
+    var containers = collectNativePurchaseOptionsContainers(scope, root);
+    containers.forEach(function (node) {
+      node.setAttribute('data-subbulk-hidden-native-options', 'true');
+      node.style.display = 'none';
+    });
+
+    if (root.__subbulkNativeOptionsObserverBound || !scope || typeof MutationObserver === 'undefined') {
+      return;
+    }
+
+    root.__subbulkNativeOptionsObserverBound = true;
+    var observer = new MutationObserver(function () {
+      var fresh = collectNativePurchaseOptionsContainers(scope, root);
+      fresh.forEach(function (node) {
+        if (node.hasAttribute('data-subbulk-hidden-native-options')) return;
+        node.setAttribute('data-subbulk-hidden-native-options', 'true');
+        node.style.display = 'none';
+      });
+    });
+    observer.observe(scope, {
+      childList: true,
+      subtree: true,
+    });
+    root.__subbulkNativeOptionsObserver = observer;
+  }
+
+  function findNativePriceScope(root) {
+    if (!root) return null;
+    return (
+      root.closest("product-info") ||
+      root.closest(".product__info-container") ||
+      root.closest(".product__column-sticky") ||
+      root.closest(".shopify-section") ||
+      root.parentElement ||
+      document
+    );
+  }
+
+  function resolveNativePriceContainer(node, root) {
+    if (!node || node === root) return null;
+
+    var candidates = [
+      node.closest('[id^="price-"][role="status"]'),
+      node.closest('price-per-item'),
+      node.closest('.volume-pricing-note'),
+      node.closest('.price__container'),
+      node.closest('.price'),
+      node
+    ];
+
+    for (var i = 0; i < candidates.length; i++) {
+      var candidate = candidates[i];
+      if (!candidate) continue;
+      if (candidate === root || (root && root.contains(candidate))) continue;
+      if (candidate.hasAttribute && candidate.hasAttribute('data-subbulk-hidden-native-price')) {
+        continue;
+      }
+      return candidate;
+    }
+
+    return null;
+  }
+
+  function shouldHideNativePriceContainer(node, root) {
+    if (!node || node === root || (root && (root.contains(node) || node.contains(root)))) return false;
+    if (node.hasAttribute && node.hasAttribute('data-subbulk-hidden-native-price')) return false;
+    if (
+      node.matches &&
+      node.matches(
+        [
+          '[id^="price-"][role="status"]',
+          'price-per-item[id^="Price-Per-Item-"]',
+          '.volume-pricing-note',
+          '.price__container',
+          '.price.price--large'
+        ].join(',')
+      )
+    ) {
+      return true;
+    }
+    if (node.querySelector) {
+      return Boolean(
+        node.querySelector(
+          [
+            '[id^="price-"][role="status"]',
+            'price-per-item[id^="Price-Per-Item-"]',
+            '.volume-pricing-note',
+            '.price__container .price-item',
+            '.price.price--large .price-item'
+          ].join(',')
+        )
+      );
+    }
+    return false;
+  }
+
+  function collectNativePriceContainers(scope, root) {
+    var containers = [];
+    if (!scope) return containers;
+
+    var selectorHits = scope.querySelectorAll(
+      [
+        '[id^="price-"][role="status"]',
+        'price-per-item[id^="Price-Per-Item-"]',
+        '.volume-pricing-note',
+        '.price.price--large',
+        '.price__container'
+      ].join(',')
+    );
+
+    selectorHits.forEach(function (node) {
+      var container = resolveNativePriceContainer(node, root);
+      if (shouldHideNativePriceContainer(container, root)) {
+        containers.push(container);
+      }
+    });
+
+    return containers.filter(function (node, index, arr) {
+      return arr.indexOf(node) === index;
+    });
+  }
+
+  function hideNativeMainPrice(root) {
+    if (!root) return;
+    var scope = findNativePriceScope(root);
+    var containers = collectNativePriceContainers(scope, root);
+    containers.forEach(function (node) {
+      node.setAttribute('data-subbulk-hidden-native-price', 'true');
+      node.style.display = 'none';
+    });
+
+    if (root.__subbulkNativePriceObserverBound || !scope || typeof MutationObserver === 'undefined') {
+      return;
+    }
+
+    root.__subbulkNativePriceObserverBound = true;
+    var observer = new MutationObserver(function () {
+      var fresh = collectNativePriceContainers(scope, root);
+      fresh.forEach(function (node) {
+        if (node.hasAttribute('data-subbulk-hidden-native-price')) return;
+        node.setAttribute('data-subbulk-hidden-native-price', 'true');
+        node.style.display = 'none';
+      });
+    });
+    observer.observe(scope, {
+      childList: true,
+      subtree: true,
+    });
+    root.__subbulkNativePriceObserver = observer;
   }
 
   function flattenPlans(groups) {
@@ -164,6 +445,21 @@
 
   function initSubbulkWidget(root, cfg) {
   if (!root || !cfg) return;
+  var allPlans = flattenPlans(cfg.sellingPlanGroups);
+  var hasLocalSubbulkPlans = allPlans.length > 0;
+  var productHasSubscriptionPlan =
+    cfg.productHasSubscriptionPlan === false
+      ? false
+      : hasLocalSubbulkPlans;
+  var widgetEnabled =
+    (cfg.showWidgetOnProductPage === true || cfg.isEnabled === true) &&
+    productHasSubscriptionPlan;
+  if (!widgetEnabled) {
+    root.innerHTML = "";
+    root.style.display = "none";
+    return;
+  }
+  root.style.display = "";
   var bulkRaw = cfg.bulkTiers;
   if (typeof bulkRaw === "string") {
     try {
@@ -181,7 +477,6 @@
       variantPriceMap.set(String(row.id), Number(row.price));
     }
   });
-  var allPlans = flattenPlans(cfg.sellingPlanGroups);
   var state = {
     purchaseMode: allPlans.length ? "subscribe" : "onetime",
     quantity: 1,
@@ -690,7 +985,7 @@
   }
 
   function syncCartForm() {
-    var form = findProductForm();
+    var form = findProductForm(root);
     if (!form) return;
     var qtyInput = form.querySelector('input[name="quantity"]');
     if (qtyInput) qtyInput.value = String(state.quantity);
@@ -704,12 +999,24 @@
     }
     if (state.purchaseMode === "subscribe" && state.selectedPlanId) {
       var sp = ensureHidden(form, "selling_plan");
+      sp.setAttribute("data-subbulk-owned", "true");
       var pn = numericSellingPlanId(state.selectedPlanId);
       sp.value = pn != null ? String(pn) : String(state.selectedPlanId);
     } else {
       var existing = form.querySelector('input[name="selling_plan"]');
-      if (existing) existing.value = "";
+      if (existing && existing.getAttribute("data-subbulk-owned") === "true") {
+        existing.value = "";
+      }
     }
+  }
+
+  function bindProductFormSync() {
+    var form = findProductForm(root);
+    if (!form || form.__subbulkSubmitSyncBound) return;
+    form.__subbulkSubmitSyncBound = true;
+    form.addEventListener("submit", function () {
+      syncCartForm();
+    });
   }
 
   function render() {
@@ -726,6 +1033,9 @@
     mountCustomCss(root, cfg);
     wire(root);
     syncCartForm();
+    bindProductFormSync();
+    hideNativePurchaseOptions(root);
+    hideNativeMainPrice(root);
     updateMainPrice(d);
   }
 
@@ -1087,29 +1397,45 @@
   render();
   }
 
-  /* Không thêm query tùy ý (vd. _t, shop): Shopify ký HMAC trên toàn bộ query —
-     tham số lạ → signature sai → 4xx/5xx và không merge được preview. */
+  /* Chỉ dùng query mà app proxy thực sự đọc và Shopify sẽ ký lại, hiện tại là productId.
+     Không thêm query linh tinh (vd. _t, shop) vì dễ làm lệch chữ ký/HMAC khi debug. */
   var roots = document.querySelectorAll(".subbulk-root");
   if (!roots.length) return;
 
-  fetch("/apps/subbulk/subscription-preview", {
-    credentials: "same-origin",
-    headers: { Accept: "application/json" },
-  })
-    .then(function (r) {
-      return r.ok ? r.json() : null;
-    })
-    .catch(function () {
-      return null;
-    })
-    .then(function (data) {
-      roots.forEach(function (root) {
-        var configId = root.getAttribute("data-subbulk-config-id");
-        var baseCfg = readConfig(configId);
-        if (!baseCfg) return;
-        var cfg = Object.assign({}, baseCfg);
-        mergeAppProxyPreview(cfg, data);
-        initSubbulkWidget(root, cfg);
-      });
+  var previewRequests = Object.create(null);
+
+  function fetchPreview(productId) {
+    var key = productId == null || productId === "" ? "__default__" : String(productId);
+    if (!previewRequests[key]) {
+      var previewUrl = "/apps/subbulk/subscription-preview";
+      if (key !== "__default__") {
+        previewUrl += "?productId=" + encodeURIComponent(key);
+      }
+
+      previewRequests[key] = fetch(previewUrl, {
+        credentials: "same-origin",
+        headers: { Accept: "application/json" },
+      })
+        .then(function (r) {
+          return r.ok ? r.json() : null;
+        })
+        .catch(function () {
+          return null;
+        });
+    }
+
+    return previewRequests[key];
+  }
+
+  roots.forEach(function (root) {
+    var configId = root.getAttribute("data-subbulk-config-id");
+    var baseCfg = readConfig(configId);
+    if (!baseCfg) return;
+
+    fetchPreview(baseCfg.productId).then(function (data) {
+      var cfg = Object.assign({}, baseCfg);
+      mergeAppProxyPreview(cfg, data);
+      initSubbulkWidget(root, cfg);
     });
+  });
 })();

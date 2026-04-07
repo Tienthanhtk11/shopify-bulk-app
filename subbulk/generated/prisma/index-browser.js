@@ -262,6 +262,7 @@ exports.Prisma.SubscriptionOfferScalarFieldEnum = {
 exports.Prisma.WidgetSettingsScalarFieldEnum = {
   id: 'id',
   shop: 'shop',
+  showWidgetOnProductPage: 'showWidgetOnProductPage',
   buyMoreHeading: 'buyMoreHeading',
   purchaseOptionsLabel: 'purchaseOptionsLabel',
   primaryColorHex: 'primaryColorHex',

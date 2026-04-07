@@ -3,7 +3,6 @@ import { Form, useActionData, useLoaderData, useNavigation } from "@remix-run/re
 import { TitleBar } from "@shopify/app-bridge-react";
 import {
   Badge,
-  Banner,
   BlockStack,
   Button,
   Card,
@@ -12,6 +11,8 @@ import {
   Page,
   Text,
 } from "@shopify/polaris";
+import { useEffect, useState } from "react";
+import { FloatingToast } from "../lib/floating-toast";
 import {
   getMerchantDetailById,
   processDeletionRequestById,
@@ -63,16 +64,30 @@ export default function MerchantDetailPage() {
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
+  const [toast, setToast] = useState<{
+    message: string;
+    tone: "success" | "critical";
+  } | null>(null);
+
+  useEffect(() => {
+    if (!actionData) return;
+    setToast({
+      message: actionData.ok ? actionData.message : actionData.error,
+      tone: actionData.ok ? "success" : "critical",
+    });
+  }, [actionData]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timeout = window.setTimeout(() => setToast(null), 2600);
+    return () => window.clearTimeout(timeout);
+  }, [toast]);
 
   return (
     <Page>
       <TitleBar title={merchant.shopDomain} />
       <BlockStack gap="500">
-        {actionData ? (
-          <Banner tone={actionData.ok ? "success" : "critical"}>
-            <p>{actionData.ok ? actionData.message : actionData.error}</p>
-          </Banner>
-        ) : null}
+        {toast ? <FloatingToast message={toast.message} tone={toast.tone} /> : null}
 
         <InlineGrid columns={{ xs: 1, md: 3 }} gap="400">
           <Card>

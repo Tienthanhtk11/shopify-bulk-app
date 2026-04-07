@@ -1,7 +1,7 @@
 # Đồng bộ từ app cũ (subscription-bulk-app): cùng client_id + app.thanhpt.online + OAuth /auth/callback.
 # Scopes theo SubBulk (purchase options + app proxy). Sau deploy, merchant có thể cần chấp nhận quyền mới trên dev store.
 name = "subscription-bulk-app"
-client_id = "e63acd707bf5ecdcda21c3c49633917e"
+client_id = "e55e1ee1368f8b7177af21807dd52826"
 application_url = "https://app.thanhpt.online"
 embedded = true
 
@@ -9,7 +9,8 @@ embedded = true
 automatically_update_urls_on_dev = true
 
 [access_scopes]
-scopes = "write_products,read_products,read_themes,write_purchase_options,read_purchase_options,read_own_subscription_contracts,write_own_subscription_contracts,read_customers,read_customer_payment_methods,read_orders,write_app_proxy,write_discounts,read_discounts"
+scopes = "write_products,read_products,read_themes,write_purchase_options,read_purchase_options,read_own_subscription_contracts,read_customers,read_orders,write_app_proxy,write_discounts,read_discounts"
+
 
 [auth]
 redirect_urls = [ "https://app.thanhpt.online/auth/callback" ]

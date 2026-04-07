@@ -27,6 +27,7 @@ import { TitleBar } from "@shopify/app-bridge-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { AdminApiContext } from "@shopify/shopify-app-remix/server";
 import prisma from "../db.server";
+import { FloatingToast } from "../lib/floating-toast";
 import { fetchProductBulkPricingJson } from "../lib/shopify-metafields.server";
 import { authenticate } from "../shopify.server";
 import { assertMerchantWriteAccess } from "../services/billing.server";
@@ -401,6 +402,10 @@ export default function SubscriptionRuleEditorPage() {
   const nav = useNavigation();
   const busy = nav.state !== "idle";
   const bulkBusy = bulkFetcher.state !== "idle";
+  const [toast, setToast] = useState<{
+    message: string;
+    tone: "success" | "critical";
+  } | null>(null);
 
   const [productGids, setProductGids] = useState<string[]>(initialProductGids);
   const [productTitles, setProductTitles] =
@@ -452,6 +457,34 @@ export default function SubscriptionRuleEditorPage() {
     syncKey,
     titlesFromLoader,
   ]);
+
+  useEffect(() => {
+    if (!actionData) return;
+    if ("message" in actionData && actionData.message) {
+      setToast({ message: actionData.message, tone: "success" });
+      return;
+    }
+    if ("error" in actionData && actionData.error) {
+      setToast({ message: actionData.error, tone: "critical" });
+    }
+  }, [actionData]);
+
+  useEffect(() => {
+    if (!bulkFetcher.data) return;
+    if ("message" in bulkFetcher.data && bulkFetcher.data.message) {
+      setToast({ message: bulkFetcher.data.message, tone: "success" });
+      return;
+    }
+    if ("error" in bulkFetcher.data && bulkFetcher.data.error) {
+      setToast({ message: bulkFetcher.data.error, tone: "critical" });
+    }
+  }, [bulkFetcher.data]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timeout = window.setTimeout(() => setToast(null), 2600);
+    return () => window.clearTimeout(timeout);
+  }, [toast]);
 
   const explicitJsonSerialized = JSON.stringify(productGids);
   const intervalsJson = useMemo(() => serializePlans(plans), [plans]);
@@ -560,26 +593,7 @@ export default function SubscriptionRuleEditorPage() {
     >
       <TitleBar title="Subscription rule" />
       <BlockStack gap="500">
-        {actionData && "ok" in actionData && actionData.ok ? (
-          <Banner tone="success" title="Thành công">
-            <p>{actionData.message}</p>
-          </Banner>
-        ) : null}
-        {actionData && "error" in actionData && actionData.error ? (
-          <Banner tone="critical" title="Lỗi">
-            <p>{actionData.error}</p>
-          </Banner>
-        ) : null}
-        {bulkFetcher.data && "ok" in bulkFetcher.data && bulkFetcher.data.ok ? (
-          <Banner tone="success" title="Thành công">
-            <p>{bulkFetcher.data.message}</p>
-          </Banner>
-        ) : null}
-        {bulkFetcher.data && "error" in bulkFetcher.data && bulkFetcher.data.error ? (
-          <Banner tone="critical" title="Lỗi">
-            <p>{bulkFetcher.data.error}</p>
-          </Banner>
-        ) : null}
+        {toast ? <FloatingToast message={toast.message} tone={toast.tone} /> : null}
 
         <Banner tone="info" title="Rule model">
           <BlockStack gap="200">

@@ -38,14 +38,25 @@ function formatDate(value: string | null) {
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { admin } = await authenticate.admin(request);
-  const rows = await listAdminSubscriptionContracts(admin, 100);
-  return {
-    analytics: buildSubscriptionAnalytics(rows),
-  };
+
+  try {
+    const rows = await listAdminSubscriptionContracts(admin, 100);
+    return {
+      analytics: buildSubscriptionAnalytics(rows),
+      scopeError: null,
+    };
+  } catch (error) {
+    // Graceful fallback when read_own_subscription_contracts scope is missing
+    console.warn("[analytics] Failed to load subscription contracts:", error instanceof Error ? error.message : error);
+    return {
+      analytics: buildSubscriptionAnalytics([]),
+      scopeError: "Unable to load subscription data. The app may need additional API scopes (read_own_subscription_contracts) approved by Shopify.",
+    };
+  }
 };
 
 export default function AnalyticsPage() {
-  const { analytics } = useLoaderData<typeof loader>();
+  const { analytics, scopeError } = useLoaderData<typeof loader>();
   const maxSeriesValue = Math.max(
     ...analytics.monthlySeries.map((item) => item.value),
     1,
@@ -55,6 +66,18 @@ export default function AnalyticsPage() {
     <Page>
       <TitleBar title="Analytics" />
       <BlockStack gap="500">
+        {scopeError ? (
+          <Card>
+            <BlockStack gap="100">
+              <Text as="h2" variant="headingMd">
+                ⚠️ Limited data
+              </Text>
+              <Text as="p" variant="bodyMd">
+                {scopeError}
+              </Text>
+            </BlockStack>
+          </Card>
+        ) : null}
         <InlineGrid columns={{ xs: 1, md: 4 }} gap="400">
           {[
             {

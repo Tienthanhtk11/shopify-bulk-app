@@ -179,6 +179,7 @@ model SubscriptionOffer {
 model WidgetSettings {
   id                   String   @id @default(cuid())
   shop                 String   @unique
+  showWidgetOnProductPage Boolean @default(false)
   buyMoreHeading       String   @default("Buy More, Save More")
   purchaseOptionsLabel String   @default("Purchase options")
   primaryColorHex      String   @default("#D73C35")

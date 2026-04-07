@@ -20,6 +20,8 @@ import {
 } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { useState, useCallback } from "react";
+import { useEffect } from "react";
+import { FloatingToast } from "../lib/floating-toast";
 import { authenticate } from "../shopify.server";
 import { getOrCreateWidgetSettings } from "../models/widget-settings.server";
 import { createOfferWithSellingPlans } from "../models/subscription-offer.server";
@@ -99,12 +101,27 @@ export default function NewOffer() {
   const actionData = useActionData<typeof action>();
   const nav = useNavigation();
   const busy = nav.state !== "idle";
+  const [toast, setToast] = useState<{
+    message: string;
+    tone: "success" | "critical";
+  } | null>(null);
 
   const [title, setTitle] = useState("");
   const [productGid, setProductGid] = useState("");
   const [discountType, setDiscountType] = useState(defaultDiscountType);
   const [discountValue, setDiscountValue] = useState(defaultDiscountValue);
   const [intervalsJson, setIntervalsJson] = useState(defaultIntervalsJson);
+
+  useEffect(() => {
+    if (!actionData?.error) return;
+    setToast({ message: actionData.error, tone: "critical" });
+  }, [actionData]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timeout = window.setTimeout(() => setToast(null), 2600);
+    return () => window.clearTimeout(timeout);
+  }, [toast]);
 
   const pickProduct = useCallback(() => {
     const w = window as unknown as {
@@ -133,6 +150,7 @@ export default function NewOffer() {
     <Page backAction={{ url: "/app/offers" }}>
       <TitleBar title="Tạo subscription offer" />
       <BlockStack gap="400">
+        {toast ? <FloatingToast message={toast.message} tone={toast.tone} /> : null}
         <Banner tone="info" title="Gợi ý">
           <p>
             Thông thường hãy dùng{" "}
@@ -142,11 +160,6 @@ export default function NewOffer() {
             sản phẩm (legacy).
           </p>
         </Banner>
-        {actionData?.error ? (
-          <Banner tone="critical" title="Không lưu được">
-            <p>{actionData.error}</p>
-          </Banner>
-        ) : null}
         <Card>
           <Form method="post">
             <FormLayout>
