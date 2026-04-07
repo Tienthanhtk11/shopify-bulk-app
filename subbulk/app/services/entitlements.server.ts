@@ -26,7 +26,7 @@ function baseFeatures() {
     settings: true,
     widgetProducts: true,
     subscriptionManagement: false,
-    subscriptionRules: false,
+    subscriptionRules: true,
     advancedOffers: false,
     analytics: false,
     automation: false,

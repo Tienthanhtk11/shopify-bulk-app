@@ -4,7 +4,7 @@ import { redirect } from "@remix-run/node";
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
   const search = url.search || "";
-  throw redirect(`/app/analytics${search}`);
+  throw redirect(`/app/settings${search}`);
 };
 
 export default function AppIndexRedirect() {

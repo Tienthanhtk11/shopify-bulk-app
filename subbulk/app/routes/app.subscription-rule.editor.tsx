@@ -57,24 +57,6 @@ type SellingPlanDraft = {
   description: string;
 };
 
-const BULK_PRICING_JSON_TEMPLATE = `[
-  {
-    "qtyBreakpoint": 1,
-    "priceAfterDiscount": 49.99,
-    "bulkPrice": 59.99
-  },
-  {
-    "qtyBreakpoint": 5,
-    "priceAfterDiscount": 46.99,
-    "bulkPrice": 56.99
-  },
-  {
-    "qtyBreakpoint": 12,
-    "priceAfterDiscount": 42.99,
-    "bulkPrice": 52.99
-  }
-]`;
-
 const DEFAULT_INTERVALS: PlanIntervalConfig[] = [
   {
     interval: "MONTH",
@@ -142,7 +124,7 @@ async function fetchBulkPricingByProduct(
   const entries = await Promise.all(
     gids.map(async (gid) => [
       gid,
-      (await fetchProductBulkPricingJson(admin, gid)) || BULK_PRICING_JSON_TEMPLATE,
+      (await fetchProductBulkPricingJson(admin, gid)) || "",
     ]),
   );
   return Object.fromEntries(entries);
@@ -556,7 +538,7 @@ export default function SubscriptionRuleEditorPage() {
         setBulkPricingByProduct((prev) => {
           const next = { ...prev };
           for (const p of picked) {
-            if (!next[p.id]) next[p.id] = BULK_PRICING_JSON_TEMPLATE;
+            if (!(p.id in next)) next[p.id] = "";
           }
           return next;
         });
@@ -858,16 +840,14 @@ export default function SubscriptionRuleEditorPage() {
                                 name="bulkPricingJson"
                                 multiline={10}
                                 autoComplete="off"
-                                value={
-                                  bulkPricingByProduct[gid] || BULK_PRICING_JSON_TEMPLATE
-                                }
+                                value={bulkPricingByProduct[gid] ?? ""}
                                 onChange={(value) =>
                                   setBulkPricingByProduct((prev) => ({
                                     ...prev,
                                     [gid]: value,
                                   }))
                                 }
-                                helpText="Saved to product metafield `app.bulk_pricing`."
+                                helpText="Leave this blank until bulk pricing is configured. Saved to product metafield `app.bulk_pricing`."
                               />
                               <InlineStack gap="200">
                                 <Button
@@ -879,8 +859,7 @@ export default function SubscriptionRuleEditorPage() {
                                     fd.set("productGid", gid);
                                     fd.set(
                                       "bulkPricingJson",
-                                      bulkPricingByProduct[gid] ||
-                                        BULK_PRICING_JSON_TEMPLATE,
+                                      bulkPricingByProduct[gid] ?? "",
                                     );
                                     bulkFetcher.submit(fd, { method: "post" });
                                   }}
