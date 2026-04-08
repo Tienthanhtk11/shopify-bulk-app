@@ -2,6 +2,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
 import { TitleBar } from "@shopify/app-bridge-react";
 import {
+  Banner,
   Badge,
   BlockStack,
   Button,
@@ -20,7 +21,7 @@ import {
 } from "../models/merchant.server";
 import { FloatingToast } from "../lib/floating-toast";
 import { listAdminPlanDefinitions } from "../services/admin-plan-catalog.server";
-import { createManualTestSubscription } from "../services/billing-test-fallback.server";
+import { createShopifySubscription, getShopifyBillingState } from "../services/billing.server";
 import { FEATURE_LABELS } from "../services/entitlements.shared";
 import { resolveEntitlements } from "../services/entitlements.server";
 import { authenticate } from "../shopify.server";
@@ -41,7 +42,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   const billingInterval = String(formData.get("billingInterval") || "monthly").trim();
 
-  const result = await createManualTestSubscription({
+  const result = await createShopifySubscription({
     admin,
     shopDomain: session.shop,
     planKey: rawPlanKey,
@@ -59,19 +60,21 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const entitlements = resolveEntitlements(latestPlan);
   const url = new URL(request.url);
   const planCatalog = await listAdminPlanDefinitions();
+  const billingState = getShopifyBillingState();
 
   return {
     shop: session.shop,
     latestPlan,
     entitlements,
     planCatalog,
+    billingState,
     requiredFeature: url.searchParams.get("required") || null,
     writeBlocked: url.searchParams.get("writeBlocked") || null,
   };
 };
 
 export default function BillingPage() {
-  const { shop, latestPlan, entitlements, planCatalog, requiredFeature, writeBlocked } = useLoaderData<typeof loader>();
+  const { shop, latestPlan, entitlements, planCatalog, billingState, requiredFeature, writeBlocked } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const nav = useNavigation();
   const busy = nav.state !== "idle";
@@ -99,6 +102,16 @@ export default function BillingPage() {
       <TitleBar title="Billing & plan access" />
       <BlockStack gap="500">
         {toast ? <FloatingToast message={toast.message} tone={toast.tone} /> : null}
+        <Banner tone="info" title="Shopify handles the approval step">
+          <p>
+            Plan changes stay embedded until Shopify opens its approval screen. After approval, the app returns to the in-app billing confirmation flow automatically.
+          </p>
+          {billingState.testMode ? (
+            <p>
+              This environment is currently using Shopify test charges for safe end-to-end verification.
+            </p>
+          ) : null}
+        </Banner>
         {requiredFeature ? (
           <Card>
             <BlockStack gap="100">
@@ -164,7 +177,7 @@ export default function BillingPage() {
                 {latestPlan?.status || "no_plan_recorded"}
               </Text>
               <Text as="p" variant="bodySm" tone="subdued">
-                Choose a plan below to subscribe via Shopify Billing.
+                Choose a plan below to open Shopify's approval flow.
               </Text>
             </BlockStack>
           </Card>
@@ -177,7 +190,7 @@ export default function BillingPage() {
                 Available plans
               </Text>
               <Text as="p" variant="bodySm" tone="subdued">
-                Choose a plan that fits your needs. You will be redirected to Shopify to confirm and approve the subscription.
+                Choose a plan that fits your needs. Shopify handles the confirmation and returns the merchant to this embedded app afterward.
               </Text>
             </BlockStack>
 

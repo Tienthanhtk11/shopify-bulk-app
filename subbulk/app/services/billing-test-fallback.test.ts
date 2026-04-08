@@ -44,9 +44,9 @@ describe("buildManualTestSubscriptionInput", () => {
       billingInterval: "monthly",
     });
 
-    expect(result.name).toBe("SubBulk Premium Monthly Test");
+    expect(result.name).toBe("SubBulk Premium Monthly");
     expect(result.returnUrl).toBe(
-      "https://app.thanhpt.online/app/welcome?billingFallback=1&planKey=growth&billingInterval=monthly",
+      "https://app.thanhpt.online/app/welcome?billingSource=shopify&planKey=growth&billingInterval=monthly",
     );
     expect(result.test).toBe(true);
     expect(result.replacementBehavior).toBe("APPLY_IMMEDIATELY");
@@ -72,9 +72,9 @@ describe("buildManualTestSubscriptionInput", () => {
       billingInterval: "annual",
     });
 
-    expect(result.name).toBe("SubBulk Ultra Annual Test");
+    expect(result.name).toBe("SubBulk Ultra Annual");
     expect(result.returnUrl).toBe(
-      "https://app.thanhpt.online/app/welcome?billingFallback=1&planKey=scale&billingInterval=annual",
+      "https://app.thanhpt.online/app/welcome?billingSource=shopify&planKey=scale&billingInterval=annual",
     );
     expect(result.lineItems[0]?.plan.appRecurringPricingDetails.price.amount).toBe(790);
     expect(result.lineItems[0]?.plan.appRecurringPricingDetails.interval).toBe("ANNUAL");
@@ -87,6 +87,6 @@ describe("buildManualTestSubscriptionInput", () => {
         planKey: "free",
         billingInterval: "monthly",
       }),
-    ).toThrow("only supports paid plans");
+    ).toThrow("only support paid plans");
   });
 });

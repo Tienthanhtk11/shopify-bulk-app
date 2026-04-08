@@ -40,7 +40,7 @@ export default function WelcomePage() {
               Shop: {shop}
             </Text>
             <Text as="p" variant="bodySm" tone="subdued">
-              This screen is ready to be used as the managed-pricing return destination. It refreshes the latest Shopify billing state into the internal merchant snapshot before the merchant continues.
+              This is the Shopify billing return screen. It refreshes the latest billing state into the internal merchant snapshot before the merchant continues.
             </Text>
             <Badge tone={reconciliation.persisted ? "success" : "attention"}>
               {reconciliation.reason}
