@@ -12,6 +12,35 @@
     }
   }
 
+  function resolveProductId(root, cfg) {
+    if (cfg && cfg.productId != null && cfg.productId !== "") {
+      return String(cfg.productId);
+    }
+
+    var analyticsProduct =
+      window.ShopifyAnalytics &&
+      window.ShopifyAnalytics.meta &&
+      window.ShopifyAnalytics.meta.product;
+    if (analyticsProduct && analyticsProduct.id != null) {
+      return String(analyticsProduct.id);
+    }
+
+    var globalMetaProduct = window.meta && window.meta.product;
+    if (globalMetaProduct && globalMetaProduct.id != null) {
+      return String(globalMetaProduct.id);
+    }
+
+    var scopedProductIdNode =
+      (root && root.closest && root.closest('[data-product-id]')) ||
+      document.querySelector('[data-product-id]');
+    if (scopedProductIdNode && scopedProductIdNode.getAttribute) {
+      var attrValue = scopedProductIdNode.getAttribute('data-product-id');
+      if (attrValue) return String(attrValue);
+    }
+
+    return null;
+  }
+
   function parseTiers(raw) {
     if (!Array.isArray(raw)) return [];
     return raw
@@ -365,10 +394,19 @@
 
   function flattenPlans(groups) {
     var out = [];
+    var seen = Object.create(null);
     (groups || []).forEach(function (g) {
       (g.plans || []).forEach(function (p) {
+        var rawId = p && p.id != null ? String(p.id) : "";
+        var rawName = p && p.name ? String(p.name) : "";
+        var dedupeKey = String(rawName || (g && g.name) || rawId)
+          .trim()
+          .toLowerCase();
+        if (!dedupeKey) dedupeKey = rawId;
+        if (dedupeKey && seen[dedupeKey]) return;
+        if (dedupeKey) seen[dedupeKey] = true;
         out.push({
-          id: String(p.id),
+          id: rawId,
           name: p.name,
           groupName: g.name,
         });
@@ -451,9 +489,13 @@
     cfg.productHasSubscriptionPlan === false
       ? false
       : hasLocalSubbulkPlans;
-  var widgetEnabled =
-    (cfg.showWidgetOnProductPage === true || cfg.isEnabled === true) &&
-    productHasSubscriptionPlan;
+  var widgetEnabledForProduct = cfg.widgetEnabledForProduct !== false;
+  var hasExplicitWidgetState = typeof cfg.isEnabled === "boolean";
+  var widgetEnabled = hasExplicitWidgetState
+    ? cfg.isEnabled === true
+    : cfg.showWidgetOnProductPage === true &&
+      widgetEnabledForProduct &&
+      productHasSubscriptionPlan;
   if (!widgetEnabled) {
     root.innerHTML = "";
     root.style.display = "none";
@@ -710,24 +752,34 @@
         return downstreamFetch.apply(this, arguments);
       }
       if (input instanceof Request) {
-        var ctReq = (input.headers.get("content-type") || "").toLowerCase();
-        if (ctReq.indexOf("application/json") === -1) {
-          return downstreamFetch.apply(this, arguments);
-        }
-        return input.clone().text().then(function (text) {
-          var next = patchCartAddBody(text, ctReq);
+        var ctReq = input.headers.get("content-type") || "";
+        var rebuildRequest = function (nextBody) {
           return downstreamFetch(input.url, {
             method: "POST",
             headers: input.headers,
-            body: next,
+            body: nextBody,
             mode: input.mode,
             credentials: input.credentials,
             cache: input.cache,
             redirect: input.redirect,
             referrer: input.referrer,
             integrity: input.integrity,
+            keepalive: input.keepalive,
+            signal: input.signal,
           });
-        });
+        };
+
+        return input.clone().text().then(function (text) {
+          var next = patchCartAddBody(text, ctReq);
+          return rebuildRequest(next);
+        }).catch(function () {
+          return input.clone().formData().then(function (formData) {
+            var next = patchCartAddBody(formData, ctReq);
+            return rebuildRequest(next);
+          }).catch(function () {
+            return downstreamFetch.apply(this, arguments);
+          }.bind(this));
+        }.bind(this));
       }
       var headers = new Headers(init.headers);
       var ct = headers.get("content-type") || "";
@@ -1432,7 +1484,17 @@
     var baseCfg = readConfig(configId);
     if (!baseCfg) return;
 
-    fetchPreview(baseCfg.productId).then(function (data) {
+    var resolvedProductId = resolveProductId(root, baseCfg);
+    if (resolvedProductId && (baseCfg.productId == null || baseCfg.productId === "")) {
+      baseCfg.productId = resolvedProductId;
+    }
+
+    var previewPromise =
+      baseCfg.previewData && typeof baseCfg.previewData === "object"
+        ? Promise.resolve(baseCfg.previewData)
+        : fetchPreview(resolvedProductId);
+
+    previewPromise.then(function (data) {
       var cfg = Object.assign({}, baseCfg);
       mergeAppProxyPreview(cfg, data);
       initSubbulkWidget(root, cfg);

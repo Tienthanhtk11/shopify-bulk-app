@@ -22,13 +22,16 @@ import {
   TextField,
 } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import widgetRuntimeSource from "../lib/subbulk-widget-runtime.js?raw";
+import widgetStylesSource from "../../extensions/subbulk-buy-box/assets/subbulk-widget.css?raw";
 import { FloatingToast } from "../lib/floating-toast";
 import {
   getOrCreateWidgetSettings,
   updateWidgetSettings,
 } from "../models/widget-settings.server";
 import { assertMerchantWriteAccess } from "../services/billing.server";
+import { resolveWidgetRenderState, scopeWidgetCss } from "../services/widget-storefront.shared";
 import { authenticate } from "../shopify.server";
 
 const FONT_OPTIONS = [
@@ -185,102 +188,272 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   return { ok: true, discountSaved: false };
 };
 
-function PreviewCard({
-  buyMoreHeading,
-  purchaseOptionsLabel,
-  primaryColorHex,
-  accentGreenHex,
-  fontFamily,
-  borderRadiusPx,
-  borderThicknessPx,
-  showSavingsBadge,
-  showCompareAtPrice,
-  showSubscriptionDetails,
-  subscriptionFooter,
-  freeShippingNote,
-}: {
+function escapeForInlineScript(value: string) {
+  return value.replace(/<\//g, "<\\/").replace(/</g, "\\u003c");
+}
+
+function buildWidgetPreviewPayload(input: {
+  showWidgetOnProductPage: boolean;
   buyMoreHeading: string;
   purchaseOptionsLabel: string;
   primaryColorHex: string;
   accentGreenHex: string;
   fontFamily: string;
-  borderRadiusPx: number;
-  borderThicknessPx: number;
+  borderRadiusPx: string;
+  borderThicknessPx: string;
   showSavingsBadge: boolean;
   showCompareAtPrice: boolean;
   showSubscriptionDetails: boolean;
+  customCssEnabled: boolean;
+  customCss: string;
   subscriptionFooter: string;
   freeShippingNote: string;
+  defaultDiscType: string;
+  defaultDiscValue: string;
 }) {
-  return (
-    <div
-      style={{
-        border: `${borderThicknessPx}px solid ${accentGreenHex || "#D0D5DD"}`,
-        borderRadius: borderRadiusPx,
-        padding: 20,
-        background: "#FFFFFF",
-        boxShadow: "0 8px 24px rgba(15, 23, 42, 0.06)",
-        fontFamily,
-      }}
-    >
-      <div style={{ color: "#667085", fontSize: 13, marginBottom: 8 }}>
-        {purchaseOptionsLabel || "Purchase options"}
-      </div>
-      <div style={{ fontSize: 24, fontWeight: 700, marginBottom: 12 }}>
-        {buyMoreHeading || "Buy More, Save More"}
-      </div>
-      <div
-        style={{
-          border: `1px solid ${primaryColorHex || "#D73C35"}`,
-          borderRadius: Math.max(borderRadiusPx - 2, 0),
-          padding: 14,
-          marginBottom: 12,
-        }}
-      >
-        <InlineStack align="space-between" blockAlign="center">
-          <div style={{ fontWeight: 700, marginBottom: 6 }}>Subscribe & save</div>
-          {showSavingsBadge ? (
-            <div
-              style={{
-                background: primaryColorHex || "#D73C35",
-                color: "#FFFFFF",
-                borderRadius: 999,
-                padding: "2px 8px",
-                fontSize: 12,
-                fontWeight: 700,
-              }}
-            >
-              Save 10%
-            </div>
-          ) : null}
-        </InlineStack>
-        {showCompareAtPrice ? (
-          <div style={{ color: "#667085", fontSize: 13, marginBottom: 6 }}>
-            <span style={{ textDecoration: "line-through", marginRight: 8 }}>$39.99</span>
-            <span style={{ color: primaryColorHex || "#D73C35", fontWeight: 700 }}>
-              $35.99
-            </span>
+  const discountValue = Number(input.defaultDiscValue);
+  const safeDiscountValue = Number.isFinite(discountValue) && discountValue >= 0 ? discountValue : 0;
+  const renderState = resolveWidgetRenderState({
+    showWidgetOnProductPage: input.showWidgetOnProductPage,
+    widgetEnabledForProduct: true,
+    productHasSubscriptionPlan: true,
+  });
+
+  return {
+    ok: true,
+    preview: input.defaultDiscType === "FIXED"
+      ? {
+          discountMode: "fixed",
+          subscriptionPercent: 0,
+          subscriptionFixed: safeDiscountValue,
+        }
+      : {
+          discountMode: "percent",
+          subscriptionPercent: safeDiscountValue,
+          subscriptionFixed: 0,
+        },
+    widgetSettings: {
+      isEnabled: renderState.isEnabled,
+      showWidgetOnProductPage: renderState.showWidgetOnProductPage,
+      widgetEnabledForProduct: renderState.widgetEnabledForProduct,
+      productHasSubscriptionPlan: renderState.productHasSubscriptionPlan,
+      buyMoreHeading: input.buyMoreHeading,
+      purchaseOptionsLabel: input.purchaseOptionsLabel,
+      primaryColorHex: input.primaryColorHex,
+      accentGreenHex: input.accentGreenHex,
+      fontFamily: input.fontFamily,
+      borderRadiusPx: Number(input.borderRadiusPx) || 6,
+      borderThicknessPx: Number(input.borderThicknessPx) || 1,
+      showSavingsBadge: input.showSavingsBadge,
+      showCompareAtPrice: input.showCompareAtPrice,
+      showSubscriptionDetails: input.showSubscriptionDetails,
+      customCssEnabled: input.customCssEnabled,
+      customCss: scopeWidgetCss(input.customCss),
+      subscriptionFooter: input.subscriptionFooter,
+      freeShippingNote: input.freeShippingNote,
+    },
+  };
+}
+
+function buildWidgetPreviewConfig(previewPayload: ReturnType<typeof buildWidgetPreviewPayload>) {
+  return {
+    productId: "1001",
+    moneyFormat: "${{amount}}",
+    currency: "USD",
+    variantId: "401",
+    variantUnitPrice: 39.99,
+    variantPrices: [
+      { id: "401", price: 39.99 },
+      { id: "402", price: 49.99 },
+    ],
+    bulkTiers: [
+      { qtyBreakpoint: 1, bulkPrice: 39.99, priceAfterDiscount: 39.99 },
+      { qtyBreakpoint: 3, bulkPrice: 37.49, priceAfterDiscount: 37.49 },
+      { qtyBreakpoint: 6, bulkPrice: 33.99, priceAfterDiscount: 33.99 },
+    ],
+    sellingPlanGroups: [
+      {
+        id: "mock-group-1",
+        name: "Subscribe & save",
+        plans: [
+          { id: "mock-plan-monthly", name: "Monthly subscription" },
+          { id: "mock-plan-2weeks", name: "2 week subscription" },
+        ],
+      },
+    ],
+    subscriptionAllocations: {
+      "401": {
+        "mock-plan-monthly": { checkout: 35.99, compareAt: 39.99 },
+        "mock-plan-2weeks": { checkout: 34.49, compareAt: 39.99 },
+      },
+      "402": {
+        "mock-plan-monthly": { checkout: 44.99, compareAt: 49.99 },
+        "mock-plan-2weeks": { checkout: 42.99, compareAt: 49.99 },
+      },
+    },
+    discountMode: previewPayload.preview.discountMode,
+    subscriptionPercent: previewPayload.preview.subscriptionPercent,
+    subscriptionFixed: previewPayload.preview.subscriptionFixed,
+    previewData: previewPayload,
+  };
+}
+
+function buildWidgetPreviewDocument(config: ReturnType<typeof buildWidgetPreviewConfig>) {
+  const serializedConfig = escapeForInlineScript(JSON.stringify(config));
+  const serializedStyles = widgetStylesSource.replace(/<\//g, "<\\/");
+  const serializedRuntime = widgetRuntimeSource.replace(/<\//g, "<\\/");
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body {
+        margin: 0;
+        background: #ffffff;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: #0f172a;
+      }
+      .preview-shell {
+        padding: 8px;
+      }
+      .preview-product {
+        max-width: 100%;
+        margin: 0 auto;
+        background: #ffffff;
+        border-radius: 12px;
+        padding: 8px;
+      }
+      .price.price--large,
+      .product-form__input {
+        margin-bottom: 0;
+      }
+      .price__container {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+      }
+      .price-item--regular {
+        font-size: 28px;
+        font-weight: 700;
+        color: #0f172a;
+      }
+      .price-item--compare {
+        font-size: 16px;
+        color: #94a3b8;
+        text-decoration: line-through;
+      }
+      .product-form__group,
+      .product-form__buttons {
+        display: grid;
+        gap: 12px;
+      }
+      .preview-form-support {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+      }
+      .product-form__buttons button {
+        height: 46px;
+        border: 0;
+        border-radius: 999px;
+        background: #0f172a;
+        color: #ffffff;
+        font-size: 14px;
+        font-weight: 600;
+      }
+      .product-form__input fieldset {
+        margin: 0;
+        padding: 14px;
+        border: 1px solid #dbe2ea;
+        border-radius: 14px;
+      }
+      .product-form__input legend {
+        padding: 0 6px;
+        font-size: 12px;
+        color: #475569;
+      }
+      .preview-variant-select {
+        width: 100%;
+        height: 42px;
+        border-radius: 12px;
+        border: 1px solid #cbd5e1;
+        padding: 0 12px;
+        background: #fff;
+      }
+      ${serializedStyles}
+    </style>
+  </head>
+  <body>
+    <div class="preview-shell">
+      <div class="preview-product" data-product-id="1001">
+        <div class="price price--large" role="status">
+          <div class="price__container">
+            <span class="price-item price-item--regular" data-subbulk-main-price>$39.99</span>
+            <span class="price-item price-item--compare">$49.99</span>
           </div>
-        ) : null}
-        {showSubscriptionDetails ? (
-          <div style={{ color: accentGreenHex || "#2E7D32", marginBottom: 4 }}>
-            {freeShippingNote || "Free Shipping on all orders over $99.99"}
-          </div>
-        ) : null}
-        <div style={{ color: "#667085", fontSize: 13 }}>
-          {subscriptionFooter || "Powered by SubBulk"}
         </div>
+        <div class="product-form__input preview-form-support">
+          <fieldset>
+            <legend>Purchase options</legend>
+            <label><input type="radio" checked /> One-time purchase</label>
+            <label><input type="radio" /> Subscribe &amp; save</label>
+          </fieldset>
+        </div>
+        <form action="/cart/add" method="post">
+          <div class="product-form__group preview-form-support">
+            <select class="preview-variant-select" name="id">
+              <option value="401">Standard / $39.99</option>
+              <option value="402">Large / $49.99</option>
+            </select>
+            <input type="number" name="quantity" value="1" min="1" />
+          </div>
+          <div id="subbulk-root-settings-preview" class="subbulk-root" data-subbulk-config-id="subbulk-config-settings-preview"></div>
+          <div class="product-form__buttons preview-form-support">
+            <button type="submit">Add to cart</button>
+          </div>
+        </form>
       </div>
-      <div
-        style={{
-          height: 10,
-          borderRadius: 999,
-          background: primaryColorHex || "#D73C35",
-          opacity: 0.14,
-        }}
-      />
     </div>
-  );
+    <script type="application/json" id="subbulk-config-settings-preview">${serializedConfig}</script>
+    <script>${serializedRuntime}</script>
+    <script>
+      (function () {
+        function sendHeight() {
+          var body = document.body;
+          var doc = document.documentElement;
+          var height = Math.max(
+            body ? body.scrollHeight : 0,
+            doc ? doc.scrollHeight : 0,
+            body ? body.offsetHeight : 0,
+            doc ? doc.offsetHeight : 0
+          );
+          window.parent.postMessage({ type: "subbulk-settings-preview-height", height: height }, "*");
+        }
+
+        if (typeof ResizeObserver !== "undefined") {
+          var observer = new ResizeObserver(sendHeight);
+          observer.observe(document.body);
+          observer.observe(document.documentElement);
+        }
+
+        window.addEventListener("load", sendHeight);
+        window.addEventListener("click", function () {
+          window.setTimeout(sendHeight, 0);
+        });
+        window.addEventListener("change", function () {
+          window.setTimeout(sendHeight, 0);
+        });
+        window.setTimeout(sendHeight, 60);
+        window.setTimeout(sendHeight, 220);
+      })();
+    </script>
+  </body>
+</html>`;
 }
 
 export default function SettingsPage() {
@@ -340,6 +513,51 @@ export default function SettingsPage() {
   const [freeShippingNote, setFreeShippingNote] = useState(
     settings.freeShippingNote,
   );
+  const [previewHeight, setPreviewHeight] = useState(700);
+  const previewPayload = useMemo(
+    () => buildWidgetPreviewPayload({
+      showWidgetOnProductPage,
+      buyMoreHeading,
+      purchaseOptionsLabel,
+      primaryColorHex,
+      accentGreenHex,
+      fontFamily,
+      borderRadiusPx,
+      borderThicknessPx,
+      showSavingsBadge,
+      showCompareAtPrice,
+      showSubscriptionDetails,
+      customCssEnabled,
+      customCss,
+      subscriptionFooter,
+      freeShippingNote,
+      defaultDiscType,
+      defaultDiscValue,
+    }),
+    [
+      accentGreenHex,
+      borderRadiusPx,
+      borderThicknessPx,
+      buyMoreHeading,
+      customCss,
+      customCssEnabled,
+      defaultDiscType,
+      defaultDiscValue,
+      fontFamily,
+      freeShippingNote,
+      primaryColorHex,
+      purchaseOptionsLabel,
+      showCompareAtPrice,
+      showSavingsBadge,
+      showSubscriptionDetails,
+      showWidgetOnProductPage,
+      subscriptionFooter,
+    ],
+  );
+  const previewFrameDocument = useMemo(
+    () => buildWidgetPreviewDocument(buildWidgetPreviewConfig(previewPayload)),
+    [previewPayload],
+  );
 
   useEffect(() => {
     setDefaultDiscType(
@@ -387,6 +605,25 @@ export default function SettingsPage() {
     const timeout = window.setTimeout(() => setToast(null), 2600);
     return () => window.clearTimeout(timeout);
   }, [toast]);
+
+  useEffect(() => {
+    function onMessage(event: MessageEvent) {
+      const data = event.data;
+      if (!data || typeof data !== "object" || data.type !== "subbulk-settings-preview-height") {
+        return;
+      }
+
+      const nextHeight = Number(data.height);
+      if (!Number.isFinite(nextHeight) || nextHeight <= 0) {
+        return;
+      }
+
+      setPreviewHeight(Math.max(420, Math.min(Math.ceil(nextHeight), 760)));
+    }
+
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
 
   return (
     <Page>
@@ -584,6 +821,29 @@ export default function SettingsPage() {
                   <Card>
                     <BlockStack gap="300">
                       <Text as="h2" variant="headingMd">
+                        Display options
+                      </Text>
+                      <Checkbox
+                        label="Show savings badge"
+                        checked={showSavingsBadge}
+                        onChange={setShowSavingsBadge}
+                      />
+                      <Checkbox
+                        label="Show compare-at price"
+                        checked={showCompareAtPrice}
+                        onChange={setShowCompareAtPrice}
+                      />
+                      <Checkbox
+                        label="Show subscription details and shipping note"
+                        checked={showSubscriptionDetails}
+                        onChange={setShowSubscriptionDetails}
+                      />
+                    </BlockStack>
+                  </Card>
+
+                  <Card>
+                    <BlockStack gap="300">
+                      <Text as="h2" variant="headingMd">
                         Advanced CSS
                       </Text>
                       <Checkbox
@@ -599,7 +859,7 @@ export default function SettingsPage() {
                         onChange={setCustomCss}
                         autoComplete="off"
                         multiline={6}
-                        helpText="Applies only to the SubBulk widget wrapper on storefront."
+                        helpText="Selectors are automatically scoped under .subbulk before being injected on the storefront."
                       />
                     </BlockStack>
                   </Card>
@@ -618,20 +878,30 @@ export default function SettingsPage() {
                 <Text as="h2" variant="headingMd">
                   Live preview
                 </Text>
-                <PreviewCard
-                  buyMoreHeading={buyMoreHeading}
-                  purchaseOptionsLabel={purchaseOptionsLabel}
-                  primaryColorHex={primaryColorHex}
-                  accentGreenHex={accentGreenHex}
-                  fontFamily={fontFamily}
-                  borderRadiusPx={Number(borderRadiusPx) || 6}
-                  borderThicknessPx={Number(borderThicknessPx) || 1}
-                  showSavingsBadge={showSavingsBadge}
-                  showCompareAtPrice={showCompareAtPrice}
-                  showSubscriptionDetails={showSubscriptionDetails}
-                  subscriptionFooter={subscriptionFooter}
-                  freeShippingNote={freeShippingNote}
-                />
+                <Text as="p" variant="bodySm" tone="subdued">
+                  This preview runs the same storefront runtime and the same config plus app-proxy payload shape used by the theme block. It assumes the preview product is already widget-enabled and has an active subscription plan.
+                </Text>
+                <div
+                  style={{
+                    border: "1px solid #dbe2ea",
+                    borderRadius: 18,
+                    overflow: "hidden",
+                    background: "#ffffff",
+                  }}
+                >
+                  <iframe
+                    title="SubBulk storefront runtime preview"
+                    srcDoc={previewFrameDocument}
+                    style={{
+                      width: "100%",
+                      height: previewHeight,
+                      border: 0,
+                      display: "block",
+                      background: "#ffffff",
+                    }}
+                    sandbox="allow-scripts allow-forms allow-same-origin"
+                  />
+                </div>
               </BlockStack>
             </Card>
 

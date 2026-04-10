@@ -554,7 +554,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   );
 
   return {
-    error: null as const,
+    error: null,
     contracts,
     portalPath: "/apps/subbulk/portal",
     theme,
@@ -656,12 +656,12 @@ export default function SubbulkCustomerPortal() {
   useEffect(() => {
     if (!actionData) return;
 
-    if (actionData.success) {
+    if ("success" in actionData && actionData.success) {
       setToast({ tone: "success", message: actionData.success });
       return;
     }
 
-    if (actionData.error) {
+    if ("error" in actionData && actionData.error) {
       setToast({ tone: "error", message: actionData.error });
     }
   }, [actionData]);

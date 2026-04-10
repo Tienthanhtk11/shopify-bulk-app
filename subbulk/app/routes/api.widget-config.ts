@@ -1,6 +1,8 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
 import prisma from "../db.server";
 import { findRuleCoveringProduct } from "../models/subscription-rule.server";
+import { isWidgetEnabledForProduct } from "../models/widget-enabled-product.server";
+import { resolveWidgetRenderState, scopeWidgetCss } from "../services/widget-storefront.shared";
 import { getOrCreateWidgetSettings } from "../models/widget-settings.server";
 
 /**
@@ -14,7 +16,10 @@ function json(data: unknown, init?: ResponseInit) {
   headers.set("Access-Control-Allow-Methods", "GET, OPTIONS");
   headers.set("Access-Control-Allow-Headers", "Content-Type");
   headers.set("Cache-Control", "public, max-age=60");
-  return Response.json(data, { ...init, headers });
+  return new Response(JSON.stringify(data), {
+    ...init,
+    headers,
+  });
 }
 
 function normalizeShop(shop: string | null) {
@@ -152,6 +157,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const productGid = `gid://shopify/Product/${productId}`;
 
   const widgetRow = await getOrCreateWidgetSettings(shopDomain);
+  const widgetEnabledForProduct = await isWidgetEnabledForProduct(shopDomain, productGid);
 
   const rule = await findRuleCoveringProduct(shopDomain, productGid);
   let offers: LegacyOffer[] = [];
@@ -184,18 +190,20 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const productHasSubscriptionPlan =
     offers.length > 0 || (await hasSubbulkPlanForProduct(shopDomain, productGid));
+  const renderState = resolveWidgetRenderState({
+    showWidgetOnProductPage: widgetRow.showWidgetOnProductPage,
+    widgetEnabledForProduct,
+    productHasSubscriptionPlan,
+  });
 
   return json({
     ok: true,
     shop: shopDomain,
     widgetSettings: {
-      isEnabled:
-        widgetRow.showWidgetOnProductPage === true &&
-        productHasSubscriptionPlan === true,
-      showWidgetOnProductPage:
-        widgetRow.showWidgetOnProductPage === true &&
-        productHasSubscriptionPlan === true,
-      productHasSubscriptionPlan,
+      isEnabled: renderState.isEnabled,
+      showWidgetOnProductPage: renderState.showWidgetOnProductPage,
+      widgetEnabledForProduct: renderState.widgetEnabledForProduct,
+      productHasSubscriptionPlan: renderState.productHasSubscriptionPlan,
       subscriptionWidgetTitle:
         widgetRow.purchaseOptionsLabel ?? "Purchase options",
       bulkPricingTableTitle: widgetRow.buyMoreHeading ?? "Buy more, save more",
@@ -203,7 +211,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       showCompareAtPrice: widgetRow.showCompareAtPrice,
       showSubscriptionPricePreview: widgetRow.showSubscriptionDetails,
       customCssEnabled: widgetRow.customCssEnabled,
-      customCss: widgetRow.customCss || null,
+      customCss: scopeWidgetCss(widgetRow.customCss) || null,
     },
     publishedAt: null,
     revision: null,

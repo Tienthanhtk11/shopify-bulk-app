@@ -88,3 +88,25 @@ export function isExpiredMerchantPlan(plan: {
   const currentPeriodEndAt = new Date(plan.currentPeriodEndAt);
   return !Number.isNaN(currentPeriodEndAt.getTime()) && currentPeriodEndAt.getTime() <= Date.now();
 }
+
+export function isMerchantPlanCancellationScheduled(plan: {
+  planKey?: string | null;
+  status?: string | null;
+  currentPeriodEndAt?: string | Date | null;
+  canceledAt?: string | Date | null;
+}) {
+  if (!plan || plan.planKey === "free" || isExpiredMerchantPlan(plan)) {
+    return false;
+  }
+
+  const normalizedStatus = String(plan.status || "").trim().toLowerCase();
+  if (normalizedStatus === "cancelled" || normalizedStatus === "canceled") {
+    return true;
+  }
+
+  if (plan.canceledAt instanceof Date) {
+    return !Number.isNaN(plan.canceledAt.getTime());
+  }
+
+  return Boolean(parseTimelineDate(plan.canceledAt));
+}

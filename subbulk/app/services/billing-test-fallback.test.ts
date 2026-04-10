@@ -42,11 +42,13 @@ describe("buildManualTestSubscriptionInput", () => {
       appUrl: "https://app.thanhpt.online",
       planKey: "growth",
       billingInterval: "monthly",
+      shopDomain: "test-6-423.myshopify.com",
+      host: "YWRtaW4uc2hvcGlmeS5jb20vc3RvcmUvdGVzdC02LTQyMw==",
     });
 
     expect(result.name).toBe("SubBulk Premium Monthly");
     expect(result.returnUrl).toBe(
-      "https://app.thanhpt.online/app/welcome?billingSource=shopify&planKey=growth&billingInterval=monthly",
+      "https://admin.shopify.com/store/test-6-423/apps/bmg-bulk-subscription/app/settings",
     );
     expect(result.test).toBe(true);
     expect(result.replacementBehavior).toBe("APPLY_IMMEDIATELY");
@@ -70,14 +72,55 @@ describe("buildManualTestSubscriptionInput", () => {
       appUrl: "https://app.thanhpt.online/",
       planKey: "scale",
       billingInterval: "annual",
+      shopDomain: "test-6-423.myshopify.com",
+      host: "YWRtaW4uc2hvcGlmeS5jb20vc3RvcmUvdGVzdC02LTQyMw==",
     });
 
     expect(result.name).toBe("SubBulk Ultra Annual");
     expect(result.returnUrl).toBe(
-      "https://app.thanhpt.online/app/welcome?billingSource=shopify&planKey=scale&billingInterval=annual",
+      "https://admin.shopify.com/store/test-6-423/apps/bmg-bulk-subscription/app/settings",
     );
     expect(result.lineItems[0]?.plan.appRecurringPricingDetails.price.amount).toBe(790);
     expect(result.lineItems[0]?.plan.appRecurringPricingDetails.interval).toBe("ANNUAL");
+  });
+
+  it("derives host from shop when the billing page request no longer carries host", () => {
+    const result = buildManualTestSubscriptionInput({
+      appUrl: "https://app.thanhpt.online",
+      planKey: "growth",
+      billingInterval: "monthly",
+      shopDomain: "test-7-2027.myshopify.com",
+    });
+
+    expect(result.returnUrl).toBe(
+      "https://admin.shopify.com/store/test-7-2027/apps/bmg-bulk-subscription/app/settings",
+    );
+  });
+
+  it("uses Shopify standard replacement behavior for paid downgrades", () => {
+    const result = buildManualTestSubscriptionInput({
+      appUrl: "https://app.thanhpt.online",
+      planKey: "growth",
+      billingInterval: "monthly",
+      shopDomain: "test-7-2027.myshopify.com",
+      currentPlanKey: "scale",
+      currentBillingInterval: "annual",
+    });
+
+    expect(result.replacementBehavior).toBe("STANDARD");
+  });
+
+  it("falls back to the app billing return route when shop domain is unavailable", () => {
+    const result = buildManualTestSubscriptionInput({
+      appUrl: "https://app.thanhpt.online",
+      planKey: "growth",
+      billingInterval: "monthly",
+      host: "YWRtaW4uc2hvcGlmeS5jb20vc3RvcmUvdGVzdC02LTQyMw==",
+    });
+
+    expect(result.returnUrl).toBe(
+      "https://app.thanhpt.online/billing/return?host=YWRtaW4uc2hvcGlmeS5jb20vc3RvcmUvdGVzdC02LTQyMw%3D%3D&embedded=1",
+    );
   });
 
   it("rejects Free because no paid charge is needed", () => {

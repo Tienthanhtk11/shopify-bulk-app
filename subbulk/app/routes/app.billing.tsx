@@ -17,19 +17,72 @@ import { Form, useActionData, useLoaderData, useNavigation } from "@remix-run/re
 import { useEffect, useState } from "react";
 import {
   getLatestMerchantPlan,
+  syncMerchantPlanSnapshot,
   upsertMerchantFromSession,
 } from "../models/merchant.server";
 import { FloatingToast } from "../lib/floating-toast";
 import { listAdminPlanDefinitions } from "../services/admin-plan-catalog.server";
-import { createShopifySubscription, getShopifyBillingState } from "../services/billing.server";
+import { cancelShopifySubscription, createShopifySubscription, getShopifyBillingState } from "../services/billing.server";
 import { FEATURE_LABELS } from "../services/entitlements.shared";
 import { resolveEntitlements } from "../services/entitlements.server";
+import { isMerchantPlanCancellationScheduled } from "../services/merchant-plan-timeline.shared";
 import { authenticate } from "../shopify.server";
 
 export const action = async ({ request }: ActionFunctionArgs) => {
-  const { admin, session, redirect } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
   const formData = await request.formData();
   const intent = String(formData.get("intent") || "").trim();
+  const host = String(formData.get("host") || "").trim() || null;
+  const latestPlan = await getLatestMerchantPlan(session.shop);
+
+  if (intent === "cancel") {
+    if (latestPlan && isMerchantPlanCancellationScheduled(latestPlan)) {
+      return json({
+        ok: true,
+        message: latestPlan.currentPeriodEndAt
+          ? `Auto-renew is already off. Paid access stays available until ${new Date(latestPlan.currentPeriodEndAt).toLocaleDateString("en-US")}.`
+          : "Auto-renew is already off for this subscription.",
+      });
+    }
+
+    try {
+      const result = await cancelShopifySubscription({
+        admin,
+        shopDomain: session.shop,
+        latestPlan,
+        prorate: false,
+      });
+
+      await syncMerchantPlanSnapshot({
+        shopDomain: session.shop,
+        planKey: latestPlan?.planKey || "free",
+        planName: result.planName,
+        status: result.status,
+        billingInterval: result.billingInterval,
+        isTest: result.isTest,
+        shopifySubscriptionGid: result.subscriptionGid,
+        currentPeriodEndAt: result.currentPeriodEnd ? new Date(result.currentPeriodEnd) : latestPlan?.currentPeriodEndAt ?? null,
+        canceledAt: new Date(),
+        rawPayload: {
+          source: "billing.cancel",
+          subscriptionGid: result.subscriptionGid,
+          status: result.status,
+          currentPeriodEnd: result.currentPeriodEnd,
+          prorate: false,
+        },
+      });
+
+      return json({
+        ok: true,
+        message: result.currentPeriodEnd
+          ? `Auto-renew is off. Paid access stays available until ${new Date(result.currentPeriodEnd).toLocaleDateString("en-US")}.`
+          : "Subscription cancellation submitted.",
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to cancel the Shopify billing subscription.";
+      return json({ ok: false, error: message }, { status: 400 });
+    }
+  }
 
   if (intent !== "subscribe") {
     return json({ ok: false, error: "Unsupported billing action." }, { status: 400 });
@@ -42,15 +95,22 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   const billingInterval = String(formData.get("billingInterval") || "monthly").trim();
 
-  const result = await createShopifySubscription({
-    admin,
-    shopDomain: session.shop,
-    planKey: rawPlanKey,
-    billingInterval,
-  });
+  try {
+    const result = await createShopifySubscription({
+      admin,
+      shopDomain: session.shop,
+      planKey: rawPlanKey,
+      billingInterval,
+      host,
+      currentPlan: latestPlan,
+    });
 
-  console.log("[billing.action] Subscription created! confirmationUrl:", result.confirmationUrl);
-  return redirect(result.confirmationUrl, { target: "_top" });
+    console.log("[billing.action] Subscription created! confirmationUrl:", result.confirmationUrl);
+    return json({ ok: true, confirmationUrl: result.confirmationUrl });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to create the Shopify billing subscription.";
+    return json({ ok: false, error: message }, { status: 400 });
+  }
 };
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -64,6 +124,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   return {
     shop: session.shop,
+    host: url.searchParams.get("host") || null,
     latestPlan,
     entitlements,
     planCatalog,
@@ -74,7 +135,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export default function BillingPage() {
-  const { shop, latestPlan, entitlements, planCatalog, billingState, requiredFeature, writeBlocked } = useLoaderData<typeof loader>();
+  const { shop, host, latestPlan, entitlements, planCatalog, billingState, requiredFeature, writeBlocked } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const nav = useNavigation();
   const busy = nav.state !== "idle";
@@ -84,11 +145,28 @@ export default function BillingPage() {
   } | null>(null);
   const featureEntries = Object.entries(entitlements.features);
   const showResolutionBanner = entitlements.planKey !== "free" && !entitlements.hasActivePlanAccess;
+  const cancellationScheduled = entitlements.isCancellationScheduled;
+  const scheduledEndDate = entitlements.accessEndsAt ? new Date(entitlements.accessEndsAt) : null;
   const visiblePlans = planCatalog.filter((plan) => entitlements.planKey === plan.key || (plan.isActive && plan.isPublic));
+  const currentPlanIsPaid = entitlements.planKey !== "free";
 
   useEffect(() => {
     if (!actionData || !("error" in actionData) || !actionData.error) return;
     setToast({ message: actionData.error, tone: "critical" });
+  }, [actionData]);
+
+  useEffect(() => {
+    if (!actionData || !("message" in actionData) || !actionData.message) return;
+    setToast({ message: actionData.message, tone: "success" });
+  }, [actionData]);
+
+  useEffect(() => {
+    if (!actionData || !("confirmationUrl" in actionData) || !actionData.confirmationUrl) return;
+
+    const openedWindow = window.open(actionData.confirmationUrl, "_top");
+    if (!openedWindow) {
+      window.location.assign(actionData.confirmationUrl);
+    }
   }, [actionData]);
 
   useEffect(() => {
@@ -105,6 +183,9 @@ export default function BillingPage() {
         <Banner tone="info" title="Shopify handles the approval step">
           <p>
             Plan changes stay embedded until Shopify opens its approval screen. After approval, the app returns to the in-app billing confirmation flow automatically.
+          </p>
+          <p>
+            Shopify applies upgrades immediately. Lower-priced changes can be prorated or deferred to the next billing cycle depending on the current plan and billing interval.
           </p>
           {billingState.testMode ? (
             <p>
@@ -151,6 +232,15 @@ export default function BillingPage() {
             </BlockStack>
           </Card>
         ) : null}
+        {cancellationScheduled ? (
+          <Banner tone="warning" title="Auto-renew is off for the current paid plan">
+            <p>
+              {scheduledEndDate
+                ? `This subscription remains available until ${scheduledEndDate.toLocaleDateString("en-US")}. After that date, the shop returns to the Free plan unless a new paid plan is approved.`
+                : "This subscription is scheduled to end at the close of the current billing period unless a new paid plan is approved."}
+            </p>
+          </Banner>
+        ) : null}
         <InlineGrid columns={{ xs: 1, md: 2 }} gap="400">
           <Card>
             <BlockStack gap="100">
@@ -163,6 +253,7 @@ export default function BillingPage() {
               <Badge tone={entitlements.isPaid ? "success" : "attention"}>
                 {entitlements.isPaid ? "Paid access" : "Free access"}
               </Badge>
+              {cancellationScheduled ? <Badge tone="warning">Auto-renew off</Badge> : null}
               <Text as="p" variant="bodySm" tone="subdued">
                 Shop: {shop}
               </Text>
@@ -174,10 +265,14 @@ export default function BillingPage() {
                 Latest billing status
               </Text>
               <Text as="p" variant="headingLg">
-                {latestPlan?.status || "no_plan_recorded"}
+                {entitlements.billingStatus || latestPlan?.status || "no_plan_recorded"}
               </Text>
               <Text as="p" variant="bodySm" tone="subdued">
-                Choose a plan below to open Shopify's approval flow.
+                {cancellationScheduled
+                  ? scheduledEndDate
+                    ? `Auto-renew is off. Access stays available until ${scheduledEndDate.toLocaleDateString("en-US")}.`
+                    : "Auto-renew is off for the current subscription."
+                  : "Choose a plan below to open Shopify's approval flow."}
               </Text>
             </BlockStack>
           </Card>
@@ -202,6 +297,7 @@ export default function BillingPage() {
                   (entitlements.planKey === "free") ||
                   (entitlements.planKey === "growth" && plan.key === "scale")
                 );
+                const isDowngrade = !isCurrent && !isFree && !isUpgrade;
 
                 return (
                   <Card key={plan.key}>
@@ -237,36 +333,82 @@ export default function BillingPage() {
                       </BlockStack>
 
                       {isCurrent ? (
-                        <Button variant="secondary" fullWidth disabled>
-                          Current plan
-                        </Button>
+                        <BlockStack gap="200">
+                          <Button variant="secondary" fullWidth disabled>
+                            Current plan
+                          </Button>
+                          {currentPlanIsPaid ? (
+                            cancellationScheduled ? (
+                              <Button fullWidth disabled tone="critical" variant="secondary">
+                                Auto-renew already off
+                              </Button>
+                            ) : (
+                              <Form method="post">
+                                <input type="hidden" name="intent" value="cancel" />
+                                <Button fullWidth submit loading={busy} tone="critical" variant="secondary">
+                                  Cancel auto-renew
+                                </Button>
+                              </Form>
+                            )
+                          ) : null}
+                        </BlockStack>
                       ) : isFree ? (
-                        <Text as="p" variant="bodySm" tone="subdued">
-                          Cancel your paid subscription on Shopify to return to Free.
-                        </Text>
+                        currentPlanIsPaid ? (
+                          cancellationScheduled ? (
+                            <Text as="p" variant="bodySm" tone="subdued">
+                              Free plan will resume automatically when the current billing period ends.
+                            </Text>
+                          ) : (
+                            <Form method="post">
+                              <input type="hidden" name="intent" value="cancel" />
+                              <Button fullWidth submit loading={busy} tone="critical" variant="secondary">
+                                Cancel and return to Free
+                              </Button>
+                            </Form>
+                          )
+                        ) : (
+                          <Text as="p" variant="bodySm" tone="subdued">
+                            Free plan is active.
+                          </Text>
+                        )
                       ) : (
                         <BlockStack gap="200">
                           <Form method="post">
                             <input type="hidden" name="intent" value="subscribe" />
                             <input type="hidden" name="planKey" value={plan.key} />
                             <input type="hidden" name="billingInterval" value="monthly" />
+                            {host ? <input type="hidden" name="host" value={host} /> : null}
                             <Button
                               variant={isUpgrade ? "primary" : "secondary"}
                               fullWidth
                               submit
                               loading={busy}
                             >
-                              {isUpgrade ? `Upgrade to ${plan.name} (Monthly)` : `Switch to ${plan.name} (Monthly)`}
+                              {isUpgrade
+                                ? `Upgrade to ${plan.name} (Monthly)`
+                                : isDowngrade
+                                  ? `Downgrade to ${plan.name} (Monthly)`
+                                  : `Switch to ${plan.name} (Monthly)`}
                             </Button>
                           </Form>
                           <Form method="post">
                             <input type="hidden" name="intent" value="subscribe" />
                             <input type="hidden" name="planKey" value={plan.key} />
                             <input type="hidden" name="billingInterval" value="annual" />
+                            {host ? <input type="hidden" name="host" value={host} /> : null}
                             <Button fullWidth submit loading={busy}>
-                              {isUpgrade ? `Upgrade to ${plan.name} (Annual)` : `Switch to ${plan.name} (Annual)`}
+                              {isUpgrade
+                                ? `Upgrade to ${plan.name} (Annual)`
+                                : isDowngrade
+                                  ? `Downgrade to ${plan.name} (Annual)`
+                                  : `Switch to ${plan.name} (Annual)`}
                             </Button>
                           </Form>
+                          {isDowngrade ? (
+                            <Text as="p" variant="bodySm" tone="subdued">
+                              Shopify may defer this lower-priced change until the next billing cycle, especially for annual plans.
+                            </Text>
+                          ) : null}
                         </BlockStack>
                       )}
                     </BlockStack>

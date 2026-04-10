@@ -2,6 +2,7 @@ import type { MerchantPlan } from "../../generated/prisma/client";
 import { getCanonicalPlanName } from "./admin-plan-catalog.shared";
 import type { InternalPlanKey } from "./partner-billing.server";
 import type { EntitledFeatureKey } from "./entitlements.shared";
+import { isExpiredMerchantPlan, isMerchantPlanCancellationScheduled } from "./merchant-plan-timeline.shared";
 
 const ACTIVE_PLAN_STATUSES = new Set(["active", "trialing"]);
 
@@ -11,6 +12,8 @@ export type MerchantEntitlements = {
   isPaid: boolean;
   billingStatus: string;
   hasActivePlanAccess: boolean;
+  isCancellationScheduled: boolean;
+  accessEndsAt: Date | null;
   features: Record<EntitledFeatureKey, boolean>;
 };
 
@@ -42,8 +45,16 @@ function normalizePlanStatus(value: string | null | undefined) {
     .replace(/^_|_$/g, "") || "none";
 }
 
-function hasPaidAccess(status: string) {
-  return ACTIVE_PLAN_STATUSES.has(status);
+function hasPaidAccess(plan: MerchantPlan | null, status: string) {
+  if (ACTIVE_PLAN_STATUSES.has(status)) {
+    return true;
+  }
+
+  if (status === "cancelled" || status === "canceled") {
+    return !isExpiredMerchantPlan(plan);
+  }
+
+  return false;
 }
 
 function resolveFeatureMatrix(planKey: InternalPlanKey) {
@@ -76,13 +87,17 @@ function resolveFeatureMatrix(planKey: InternalPlanKey) {
 
 export function resolveEntitlements(plan: MerchantPlan | null): MerchantEntitlements {
   const rawPlanKey = normalizePlanKey(plan?.planKey || plan?.planName || "free");
-  const billingStatus = normalizePlanStatus(plan?.status);
+  const normalizedStatus = normalizePlanStatus(plan?.status);
   const planKey: InternalPlanKey = rawPlanKey.includes("scale")
     ? "scale"
     : rawPlanKey.includes("growth")
       ? "growth"
       : "free";
-  const hasActivePlanAccess = planKey === "free" || hasPaidAccess(billingStatus);
+  const isCancellationScheduled = isMerchantPlanCancellationScheduled(plan);
+  const billingStatus = isCancellationScheduled && normalizedStatus === "active"
+    ? "cancel_scheduled"
+    : normalizedStatus;
+  const hasActivePlanAccess = planKey === "free" || hasPaidAccess(plan, normalizedStatus);
   const resolvedFeatures = hasActivePlanAccess ? resolveFeatureMatrix(planKey) : baseFeatures();
 
   return {
@@ -91,6 +106,8 @@ export function resolveEntitlements(plan: MerchantPlan | null): MerchantEntitlem
     isPaid: planKey !== "free" && hasActivePlanAccess,
     billingStatus,
     hasActivePlanAccess,
+    isCancellationScheduled,
+    accessEndsAt: plan?.currentPeriodEndAt ?? null,
     features: resolvedFeatures,
   };
 }

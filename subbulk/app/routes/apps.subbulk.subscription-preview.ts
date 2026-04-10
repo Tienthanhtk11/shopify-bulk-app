@@ -3,6 +3,8 @@ import { json } from "@remix-run/node";
 import { isValidAppProxyRequest } from "../lib/app-proxy-signature.server";
 import prisma from "../db.server";
 import { findRuleCoveringProduct } from "../models/subscription-rule.server";
+import { isWidgetEnabledForProduct } from "../models/widget-enabled-product.server";
+import { resolveWidgetRenderState, scopeWidgetCss } from "../services/widget-storefront.shared";
 import { getOrCreateWidgetSettings } from "../models/widget-settings.server";
 
 async function hasSubbulkPlanForProduct(shop: string, productId: string | null) {
@@ -63,7 +65,18 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const isFixed = ws.defaultSubscriptionDiscountType === "FIXED";
   const num = Number(ws.defaultSubscriptionDiscountValue);
   const safe = Number.isFinite(num) && num >= 0 ? num : 0;
-  const productHasSubscriptionPlan = await hasSubbulkPlanForProduct(shop, productId);
+  const productGid = productId && /^\d+$/.test(productId)
+    ? `gid://shopify/Product/${productId}`
+    : null;
+  const [widgetEnabledForProduct, productHasSubscriptionPlan] = await Promise.all([
+    productGid ? isWidgetEnabledForProduct(shop, productGid) : Promise.resolve(false),
+    hasSubbulkPlanForProduct(shop, productId),
+  ]);
+  const renderState = resolveWidgetRenderState({
+    showWidgetOnProductPage: ws.showWidgetOnProductPage,
+    widgetEnabledForProduct,
+    productHasSubscriptionPlan: Boolean(productHasSubscriptionPlan),
+  });
   const preview = isFixed
     ? {
         discountMode: "fixed" as const,
@@ -81,8 +94,10 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       ok: true,
       preview,
       widgetSettings: {
-        showWidgetOnProductPage: ws.showWidgetOnProductPage,
-        productHasSubscriptionPlan,
+        isEnabled: renderState.isEnabled,
+        showWidgetOnProductPage: renderState.showWidgetOnProductPage,
+        widgetEnabledForProduct: renderState.widgetEnabledForProduct,
+        productHasSubscriptionPlan: renderState.productHasSubscriptionPlan,
         buyMoreHeading: ws.buyMoreHeading,
         purchaseOptionsLabel: ws.purchaseOptionsLabel,
         primaryColorHex: ws.primaryColorHex,
@@ -94,7 +109,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         showCompareAtPrice: ws.showCompareAtPrice,
         showSubscriptionDetails: ws.showSubscriptionDetails,
         customCssEnabled: ws.customCssEnabled,
-        customCss: ws.customCss,
+        customCss: scopeWidgetCss(ws.customCss),
         subscriptionFooter: ws.subscriptionFooter,
         freeShippingNote: ws.freeShippingNote,
       },

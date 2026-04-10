@@ -29,10 +29,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     };
   }
 
-  const errors = loginErrorMessage(await login(request));
-
   return {
-    errors,
+    errors: {},
     initialShop: url.searchParams.get("shop") || "",
     polarisTranslations,
   };
@@ -53,7 +51,7 @@ export default function Auth() {
   const formRef = useRef<HTMLFormElement | null>(null);
   const autoSubmittedRef = useRef(false);
   const errors = actionData?.errors || loaderData?.errors || {};
-  const showManualFallback = !loaderData.initialShop;
+  const showManualFallback = !loaderData.initialShop || Boolean(errors.shop);
   const shouldAutoSubmit = Boolean(loaderData.initialShop) && !errors.shop;
 
   useEffect(() => {

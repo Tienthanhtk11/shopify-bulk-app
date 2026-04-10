@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { resolvePartnerDashboardPlan } from "./partner-billing.server";
 import { resolveEntitlements } from "./entitlements.server";
+import { isMerchantPlanCancellationScheduled } from "./merchant-plan-timeline.shared";
 
 describe("resolvePartnerDashboardPlan", () => {
   it("maps exact plan names from env-compatible aliases", () => {
@@ -66,5 +67,55 @@ describe("resolveEntitlements", () => {
     expect(entitlements.isPaid).toBe(true);
     expect(entitlements.features.automation).toBe(true);
     expect(entitlements.features.prioritySupport).toBe(true);
+  });
+
+  it("keeps paid access until the current period ends after auto-renew is cancelled", () => {
+    const entitlements = resolveEntitlements({
+      planKey: "growth",
+      planName: "Growth",
+      status: "cancelled",
+      currentPeriodEndAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
+    } as never);
+
+    expect(entitlements.hasActivePlanAccess).toBe(true);
+    expect(entitlements.isPaid).toBe(true);
+    expect(entitlements.isCancellationScheduled).toBe(true);
+    expect(entitlements.billingStatus).toBe("cancelled");
+    expect(entitlements.features.subscriptionManagement).toBe(true);
+  });
+
+  it("marks active plans with canceledAt as cancel-scheduled", () => {
+    const entitlements = resolveEntitlements({
+      planKey: "growth",
+      planName: "Growth",
+      status: "active",
+      canceledAt: new Date(),
+      currentPeriodEndAt: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
+    } as never);
+
+    expect(entitlements.hasActivePlanAccess).toBe(true);
+    expect(entitlements.isPaid).toBe(true);
+    expect(entitlements.isCancellationScheduled).toBe(true);
+    expect(entitlements.billingStatus).toBe("cancel_scheduled");
+  });
+});
+
+describe("isMerchantPlanCancellationScheduled", () => {
+  it("returns true when canceledAt is set before the period end", () => {
+    expect(isMerchantPlanCancellationScheduled({
+      planKey: "growth",
+      status: "active",
+      canceledAt: new Date(),
+      currentPeriodEndAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    })).toBe(true);
+  });
+
+  it("returns false after the paid period has already expired", () => {
+    expect(isMerchantPlanCancellationScheduled({
+      planKey: "growth",
+      status: "cancelled",
+      canceledAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+      currentPeriodEndAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
+    })).toBe(false);
   });
 });

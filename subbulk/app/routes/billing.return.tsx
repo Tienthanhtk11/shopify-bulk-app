@@ -1,8 +1,12 @@
 import type { LoaderFunctionArgs } from "@remix-run/node";
+
 import { authenticate } from "../shopify.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  await authenticate.admin(request);
-
-  return null;
+  const { redirect } = await authenticate.admin(request);
+  return redirect("/app/welcome");
 };
+
+export default function BillingReturnRoute() {
+  return null;
+}

@@ -97,10 +97,19 @@ function buildSellingPlansToCreate(
   discountType: "PERCENTAGE" | "FIXED",
   discountValue: number,
 ) {
+  const discountLabel =
+    discountType === "PERCENTAGE"
+      ? `${discountValue}% off`
+      : `$${discountValue} off`;
+
   return planIntervals.map((p, idx) => {
     const resolvedDiscountType = p.discountType ?? discountType;
     const resolvedDiscountValue =
       typeof p.discountValue === "number" ? p.discountValue : discountValue;
+    const resolvedDiscountLabel =
+      resolvedDiscountType === "PERCENTAGE"
+        ? `${resolvedDiscountValue}% off`
+        : `$${resolvedDiscountValue} off`;
 
     const pricingPolicies =
       resolvedDiscountType === "PERCENTAGE"
@@ -122,7 +131,9 @@ function buildSellingPlansToCreate(
           ];
 
     return {
-      name: p.name?.trim() || `${groupName} — ${p.label}`,
+      name:
+        p.name?.trim() ||
+        `${groupName} — ${p.label} (${resolvedDiscountLabel || discountLabel})`,
       options: [p.label],
       category: "SUBSCRIPTION",
       description: p.description?.trim() || undefined,
@@ -161,6 +172,39 @@ export async function syncRuleProductsOnShopify(
   const toRemove = current.filter((id) => !desired.has(id));
 
   if (toRemove.length) {
+    const variantRows = await fetchVariantGidsForProducts(admin, toRemove);
+    const productVariantIds = variantRows.flatMap((row) => row.variantGids);
+
+    if (productVariantIds.length) {
+      const removeVariants = await admin.graphql(
+        `#graphql
+        mutation SubBulkSPGRemoveVariants($id: ID!, $productVariantIds: [ID!]!) {
+          sellingPlanGroupRemoveProductVariants(
+            id: $id
+            productVariantIds: $productVariantIds
+          ) {
+            userErrors { field message }
+          }
+        }`,
+        {
+          variables: {
+            id: sellingPlanGroupGid,
+            productVariantIds,
+          },
+        },
+      );
+      const rvj = await removeVariants.json();
+      const removeVariantErrors =
+        rvj.data?.sellingPlanGroupRemoveProductVariants?.userErrors ?? [];
+      if (removeVariantErrors.length) {
+        throw new Error(
+          removeVariantErrors
+            .map((e: { message: string }) => e.message)
+            .join("; "),
+        );
+      }
+    }
+
     const rm = await admin.graphql(
       `#graphql
       mutation SubBulkSPGRemoveProducts($id: ID!, $productIds: [ID!]!) {

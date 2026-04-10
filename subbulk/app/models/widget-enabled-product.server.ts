@@ -79,6 +79,24 @@ export async function removeWidgetEnabledProduct(
   await prisma.widgetEnabledProduct.delete({ where: { id: row.id } });
 }
 
+export async function syncWidgetEnabledProducts(
+  admin: AdminApiContext,
+  shop: string,
+  desiredProductGids: string[],
+) {
+  const desired = new Set(desiredProductGids);
+  const rows = await listWidgetEnabledProducts(shop);
+
+  for (const row of rows) {
+    if (desired.has(row.productGid)) continue;
+    await removeWidgetEnabledProduct(admin, shop, row.id);
+  }
+
+  for (const productGid of desiredProductGids) {
+    await addWidgetEnabledProduct(admin, shop, productGid);
+  }
+}
+
 export function validateBulkPricingJson(raw: string): {
   ok: true;
   normalized: string;

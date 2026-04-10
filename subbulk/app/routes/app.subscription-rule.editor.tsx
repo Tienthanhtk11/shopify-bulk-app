@@ -45,6 +45,7 @@ import {
   isWidgetEnabledForProduct,
   listWidgetEnabledProducts,
   saveProductBulkPricing,
+  syncWidgetEnabledProducts,
 } from "../models/widget-enabled-product.server";
 
 type SellingPlanDraft = {
@@ -249,9 +250,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     existingRule.planIntervalsJson !== normalizedIntervalsJson;
 
   try {
-    for (const productGid of productGids) {
-      await addWidgetEnabledProduct(admin, session.shop, productGid);
-    }
+    await syncWidgetEnabledProducts(admin, session.shop, productGids);
 
     await prisma.subscriptionRule.upsert({
       where: { shop: session.shop },

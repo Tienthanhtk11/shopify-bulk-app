@@ -21,6 +21,10 @@ export function buildManualTestSubscriptionInput(input: {
   planKey: InternalPlanKey;
   billingInterval?: BillingTestFallbackInterval | string | null;
   currencyCode?: string;
+  shopDomain?: string | null;
+  host?: string | null;
+  currentPlanKey?: string | null;
+  currentBillingInterval?: string | null;
 }) {
   return buildShopifySubscriptionInput(input);
 }
