@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-
-vi.mock("../db.server", () => ({
-  default: {},
-}));
 import {
   buildManualTestSubscriptionInput,
   getBillingTestFallbackState,
 } from "./billing-test-fallback.server";
+
+vi.mock("../db.server", () => ({
+  default: {},
+}));
 
 const originalEnv = {
   SHOPIFY_BILLING_TEST_FALLBACK_ENABLED: process.env.SHOPIFY_BILLING_TEST_FALLBACK_ENABLED,
@@ -52,7 +52,7 @@ describe("buildManualTestSubscriptionInput", () => {
 
     expect(result.name).toBe("SubBulk Premium Monthly");
     expect(result.returnUrl).toBe(
-      "https://admin.shopify.com/store/test-6-423/apps/bmg-bulk-subscription/app/settings",
+      "https://app.thanhpt.online/billing/return?shop=test-6-423.myshopify.com&host=YWRtaW4uc2hvcGlmeS5jb20vc3RvcmUvdGVzdC02LTQyMw%3D%3D&embedded=1",
     );
     expect(result.test).toBe(true);
     expect(result.replacementBehavior).toBe("APPLY_IMMEDIATELY");
@@ -82,7 +82,7 @@ describe("buildManualTestSubscriptionInput", () => {
 
     expect(result.name).toBe("SubBulk Ultra Annual");
     expect(result.returnUrl).toBe(
-      "https://admin.shopify.com/store/test-6-423/apps/bmg-bulk-subscription/app/settings",
+      "https://app.thanhpt.online/billing/return?shop=test-6-423.myshopify.com&host=YWRtaW4uc2hvcGlmeS5jb20vc3RvcmUvdGVzdC02LTQyMw%3D%3D&embedded=1",
     );
     expect(result.lineItems[0]?.plan.appRecurringPricingDetails.price.amount).toBe(790);
     expect(result.lineItems[0]?.plan.appRecurringPricingDetails.interval).toBe("ANNUAL");
@@ -97,7 +97,7 @@ describe("buildManualTestSubscriptionInput", () => {
     });
 
     expect(result.returnUrl).toBe(
-      "https://admin.shopify.com/store/test-7-2027/apps/bmg-bulk-subscription/app/settings",
+      "https://app.thanhpt.online/billing/return?shop=test-7-2027.myshopify.com&host=YWRtaW4uc2hvcGlmeS5jb20vc3RvcmUvdGVzdC03LTIwMjc%3D&embedded=1",
     );
   });
 

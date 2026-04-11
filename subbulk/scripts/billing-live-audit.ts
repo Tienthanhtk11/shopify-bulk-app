@@ -1,8 +1,7 @@
 import "@shopify/shopify-api/adapters/node";
 import { readFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { PrismaClient } from "../generated/prisma/client";
-import { Prisma } from "../generated/prisma/client";
+import { Prisma, PrismaClient } from "../generated/prisma/client";
 import { ApiVersion, shopifyApi } from "@shopify/shopify-api";
 
 type EnvMap = Record<string, string>;

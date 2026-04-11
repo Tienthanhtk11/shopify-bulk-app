@@ -33,6 +33,7 @@ yarn.lock
 pnpm-lock.yaml
 
 /extensions/*/dist
+/extensions/sub-bulk-customer-account/src/generated
 
 # Ignore shopify files created during app dev
 .shopify/*

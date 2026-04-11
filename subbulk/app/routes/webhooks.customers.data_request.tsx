@@ -7,7 +7,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const { payload, topic, shop } = await authenticate.webhook(request);
   const summary = summarizeCustomersDataRequestPayload(payload);
 
-  console.log(`Received ${topic} webhook for ${shop}`);
+  console.info(`[compliance] Received ${topic} webhook for ${shop}`);
 
   await recordMerchantEvent({
     shopDomain: shop,

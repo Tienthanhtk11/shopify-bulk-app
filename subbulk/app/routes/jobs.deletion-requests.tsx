@@ -1,9 +1,10 @@
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { json } from "@remix-run/node";
+import { serverConfig } from "../config.server";
 import { processPendingDeletionRequests } from "../models/merchant.server";
 
 function assertAuthorized(request: Request) {
-  const configuredSecret = process.env.JOB_RUNNER_SECRET;
+  const configuredSecret = serverConfig.jobRunnerSecret;
   if (!configuredSecret) {
     throw new Response("JOB_RUNNER_SECRET is not configured.", { status: 503 });
   }

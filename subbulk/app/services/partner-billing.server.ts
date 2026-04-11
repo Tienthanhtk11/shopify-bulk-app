@@ -1,3 +1,5 @@
+import { readPartnerPlanEnvConfig } from "../config.server";
+
 export type InternalPlanKey = "free" | "growth" | "scale";
 
 type PartnerPlanConfig = {
@@ -31,38 +33,24 @@ function expandGidCandidates(value: string | null | undefined) {
   return Array.from(new Set([normalized, normalizedLastSegment, trailingDigits].filter(Boolean)));
 }
 
-function parseCsv(value: string | undefined, defaults: string[] = []) {
-  const source = value && value.trim().length > 0 ? value.split(",") : defaults;
-
-  return Array.from(
-    new Set(source.map((item) => normalizeToken(item)).filter(Boolean)),
-  );
-}
-
-function parseGidCsv(value: string | undefined) {
-  const source = value && value.trim().length > 0 ? value.split(",") : [];
-
-  return Array.from(
-    new Set(source.flatMap((item) => expandGidCandidates(item)).filter(Boolean)),
-  );
-}
-
 function getPartnerPlanConfigs(): PartnerPlanConfig[] {
+  const config = readPartnerPlanEnvConfig();
+
   return [
     {
       planKey: "free",
-      aliases: parseCsv(process.env.PARTNER_PLAN_FREE_NAMES, ["Free"]),
-      gids: parseGidCsv(process.env.PARTNER_PLAN_FREE_GIDS),
+      aliases: config.free.aliases,
+      gids: config.free.gids,
     },
     {
       planKey: "growth",
-      aliases: parseCsv(process.env.PARTNER_PLAN_GROWTH_NAMES, ["Growth", "Premium"]),
-      gids: parseGidCsv(process.env.PARTNER_PLAN_GROWTH_GIDS),
+      aliases: config.growth.aliases,
+      gids: config.growth.gids,
     },
     {
       planKey: "scale",
-      aliases: parseCsv(process.env.PARTNER_PLAN_SCALE_NAMES, ["Scale", "Ultra"]),
-      gids: parseGidCsv(process.env.PARTNER_PLAN_SCALE_GIDS),
+      aliases: config.scale.aliases,
+      gids: config.scale.gids,
     },
   ];
 }

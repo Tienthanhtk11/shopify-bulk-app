@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { run } from "../src/run";
 
 vi.mock("../generated/api", () => ({
   DiscountApplicationStrategy: {
@@ -6,8 +7,6 @@ vi.mock("../generated/api", () => ({
     Maximum: "MAXIMUM",
   },
 }));
-
-import { run } from "../src/run";
 
 function buildCartLine(overrides = {}) {
   return {

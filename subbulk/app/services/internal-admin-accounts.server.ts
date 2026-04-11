@@ -29,23 +29,6 @@ function verifyPasswordHash(password: string, passwordHash: string) {
   return timingSafeEqual(left, right);
 }
 
-function parseBootstrapAccountsEnv() {
-  return String(process.env.INTERNAL_ADMIN_PORTAL_ACCOUNTS || "")
-    .split(",")
-    .map((entry) => entry.trim())
-    .filter(Boolean)
-    .map((entry) => {
-      const [email, password, displayName] = entry.split(":").map((value) => value?.trim());
-      if (!email || !password) return null;
-      return {
-        email: normalizeEmail(email),
-        password,
-        displayName: displayName || email,
-      };
-    })
-    .filter((account): account is { email: string; password: string; displayName: string } => Boolean(account));
-}
-
 function toAdminViewModel(record: {
   id: string;
   email: string;
@@ -66,35 +49,7 @@ function toAdminViewModel(record: {
   };
 }
 
-export async function ensureInternalAdminBootstrap() {
-  const total = await prisma.internalAdminAccount.count();
-  if (total > 0) {
-    return false;
-  }
-
-  const bootstrapAccounts = parseBootstrapAccountsEnv();
-  if (bootstrapAccounts.length === 0) {
-    return false;
-  }
-
-  await prisma.$transaction(
-    bootstrapAccounts.map((account) =>
-      prisma.internalAdminAccount.create({
-        data: {
-          email: account.email,
-          displayName: account.displayName,
-          passwordHash: buildPasswordHash(account.password),
-          isActive: true,
-        },
-      }),
-    ),
-  );
-
-  return true;
-}
-
 export async function authenticateInternalAdminAccount(email: string, password: string) {
-  await ensureInternalAdminBootstrap();
   const normalizedEmail = normalizeEmail(email);
   const normalizedPassword = password.trim();
   const account = await prisma.internalAdminAccount.findUnique({ where: { email: normalizedEmail } });
@@ -121,7 +76,6 @@ export async function getInternalAdminAccountById(id: string) {
 }
 
 export async function listInternalAdminAccounts() {
-  await ensureInternalAdminBootstrap();
   const accounts = await prisma.internalAdminAccount.findMany({
     orderBy: [{ isActive: "desc" }, { createdAt: "asc" }],
   });
@@ -142,6 +96,60 @@ export async function createInternalAdminAccount(input: {
       isActive: input.isActive,
     },
   });
+}
+
+export async function bootstrapInternalAdminAccount(input: {
+  email: string;
+  displayName: string;
+  password: string;
+  forceResetPassword?: boolean;
+}) {
+  const email = normalizeEmail(input.email);
+  const displayName = input.displayName.trim();
+  const password = input.password.trim();
+
+  if (!email || !displayName || !password) {
+    throw new Error("Email, display name, and password are required.");
+  }
+
+  const existing = await prisma.internalAdminAccount.findUnique({ where: { email } });
+  if (!existing) {
+    const created = await prisma.internalAdminAccount.create({
+      data: {
+        email,
+        displayName,
+        passwordHash: buildPasswordHash(password),
+        isActive: true,
+      },
+    });
+
+    return {
+      account: toAdminViewModel(created),
+      created: true,
+      passwordReset: true,
+    };
+  }
+
+  if (!input.forceResetPassword) {
+    throw new Error(
+      `Internal admin account already exists for ${email}. Re-run with --force-reset-password to update it.`,
+    );
+  }
+
+  const updated = await prisma.internalAdminAccount.update({
+    where: { id: existing.id },
+    data: {
+      displayName,
+      isActive: true,
+      passwordHash: buildPasswordHash(password),
+    },
+  });
+
+  return {
+    account: toAdminViewModel(updated),
+    created: false,
+    passwordReset: true,
+  };
 }
 
 export async function updateInternalAdminAccount(input: {

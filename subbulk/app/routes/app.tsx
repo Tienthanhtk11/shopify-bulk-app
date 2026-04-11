@@ -5,6 +5,7 @@ import { AppProvider } from "@shopify/shopify-app-remix/react";
 import { NavMenu } from "@shopify/app-bridge-react";
 import { Banner, Box } from "@shopify/polaris";
 
+import { serverConfig } from "../config.server";
 import { getLatestMerchantPlan, upsertMerchantFromSession } from "../models/merchant.server";
 import { requiredFeatureForPath } from "../services/billing.server";
 import { FEATURE_LABELS } from "../services/entitlements.shared";
@@ -34,7 +35,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   return {
-    apiKey: process.env.SHOPIFY_API_KEY || "",
+    apiKey: serverConfig.shopifyApiKey,
     isInternalAdmin: isInternalAdminSession(session),
     entitlements,
     lockedFeature: requestUrl.searchParams.get("lockedFeature") || null,

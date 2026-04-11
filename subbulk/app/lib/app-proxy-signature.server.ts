@@ -1,16 +1,16 @@
 import "@shopify/shopify-api/adapters/node";
 import { ApiVersion, shopifyApi } from "@shopify/shopify-api";
+import { serverConfig } from "../config.server";
 
 /**
- * Xác thực App Proxy (HMAC) không tải session / không refresh token.
- * Dùng cho JSON public (vd. subscription preview) — tránh 500 khi offline token lỗi.
+ * Validate App Proxy HMAC without loading sessions or refreshing tokens.
+ * This is used for public JSON routes so token refresh failures do not turn into 500s.
  */
 function proxyValidationApi() {
-  const raw = process.env.SHOPIFY_APP_URL || "https://localhost";
-  const appUrl = new URL(raw);
+  const appUrl = serverConfig.shopifyAppUrl;
   return shopifyApi({
-    apiKey: process.env.SHOPIFY_API_KEY || "",
-    apiSecretKey: process.env.SHOPIFY_API_SECRET || "",
+    apiKey: serverConfig.shopifyApiKey,
+    apiSecretKey: serverConfig.shopifyApiSecret,
     apiVersion: ApiVersion.January25,
     hostName: appUrl.host,
     hostScheme: appUrl.protocol.replace(":", "") || "https",
@@ -18,7 +18,7 @@ function proxyValidationApi() {
   });
 }
 
-/** Giống logic @shopify/shopify-app-remix authenticate/public/appProxy. */
+/** Mirrors @shopify/shopify-app-remix authenticate/public/appProxy logic. */
 export async function isValidAppProxyRequest(request: Request): Promise<boolean> {
   const api = proxyValidationApi();
   const url = new URL(request.url);

@@ -26,7 +26,7 @@ export async function deleteOffer(shop: string, id: string) {
   return prisma.subscriptionOffer.deleteMany({ where: { shop, id } });
 }
 
-/** Lấy toàn bộ variant GID của product (tối đa 250) để gắn selling plan đúng từng variant. */
+/** Fetch up to 250 product variant GIDs so selling plans can be attached precisely. */
 export async function fetchProductVariantGids(
   admin: AdminApiContext,
   productGid: string,
@@ -45,7 +45,7 @@ export async function fetchProductVariantGids(
   );
   const json = await res.json();
   if (!json.data?.product?.id) {
-    throw new Error("Không tìm thấy sản phẩm trên Shopify (kiểm tra Product GID).");
+    throw new Error("Product was not found in Shopify. Check the Product GID.");
   }
   const nodes = json.data.product.variants?.nodes ?? [];
   return nodes
@@ -54,8 +54,9 @@ export async function fetchProductVariantGids(
 }
 
 /**
- * SubBulk cho phép mua một lần + đăng ký. Một số cửa hàng sau sellingPlanGroupCreate
- * bị `requiresSellingPlan: true` → theme hiện Sold out cho nút mua thường.
+ * SubBulk supports one-time purchase and subscription together.
+ * Some stores end up with `requiresSellingPlan: true` after group creation,
+ * which makes the normal purchase button appear sold out on the storefront.
  */
 export async function ensureProductAllowsOneTimePurchase(
   admin: AdminApiContext,
@@ -98,7 +99,7 @@ export async function ensureProductAllowsOneTimePurchase(
   }
 }
 
-/** Tạo Selling plan group trên Shopify + lưu DB. */
+/** Create a selling plan group in Shopify and persist it locally. */
 export async function createOfferWithSellingPlans(
   admin: AdminApiContext,
   shop: string,
@@ -112,7 +113,7 @@ export async function createOfferWithSellingPlans(
 ) {
   const variantGids = await fetchProductVariantGids(admin, input.productGid);
   if (!variantGids.length) {
-    throw new Error("Sản phẩm không có variant — không tạo được selling plan.");
+    throw new Error("The product has no variants, so the selling plan could not be created.");
   }
 
   const planIntervals = input.planIntervals.length
@@ -203,7 +204,7 @@ export async function createOfferWithSellingPlans(
 
   const group = payload?.sellingPlanGroup;
   if (!group?.id) {
-    throw new Error("Không tạo được selling plan group");
+    throw new Error("Unable to create the selling plan group.");
   }
 
   await ensureProductAllowsOneTimePurchase(admin, input.productGid);

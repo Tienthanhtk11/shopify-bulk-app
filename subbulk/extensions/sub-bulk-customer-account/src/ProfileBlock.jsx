@@ -6,8 +6,7 @@ import {
 } from '@shopify/ui-extensions/customer-account/preact';
 import {render} from 'preact';
 import {useEffect, useState} from 'preact/hooks';
-
-const APP_URL = 'https://app.thanhpt.online';
+import {APP_URL} from './generated/app-url.js';
 
 const BOARD_COLUMNS = 'minmax(0, 2fr) minmax(0, 1.2fr) auto';
 

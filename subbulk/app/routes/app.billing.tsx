@@ -105,7 +105,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       currentPlan: latestPlan,
     });
 
-    console.log("[billing.action] Subscription created! confirmationUrl:", result.confirmationUrl);
     return json({ ok: true, confirmationUrl: result.confirmationUrl });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to create the Shopify billing subscription.";

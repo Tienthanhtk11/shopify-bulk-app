@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { validateBulkPricingJson } from "./widget-enabled-product.server";
 
 vi.mock("../db.server", () => ({
   default: {},
@@ -9,8 +10,6 @@ vi.mock("../lib/shopify-metafields.server", () => ({
   setProductBooleanMetafield: vi.fn(),
   setProductJsonMetafield: vi.fn(),
 }));
-
-import { validateBulkPricingJson } from "./widget-enabled-product.server";
 
 describe("validateBulkPricingJson", () => {
   it("normalizes empty input to an empty JSON array", () => {
@@ -23,12 +22,12 @@ describe("validateBulkPricingJson", () => {
   it("rejects malformed JSON and non-array payloads", () => {
     expect(validateBulkPricingJson("{")).toEqual({
       ok: false,
-      error: "JSON không hợp lệ.",
+      error: "JSON is invalid.",
     });
 
     expect(validateBulkPricingJson('{"qtyBreakpoint":1}')).toEqual({
       ok: false,
-      error: "Bulk pricing phải là mảng JSON.",
+      error: "Bulk pricing must be a JSON array.",
     });
   });
 
@@ -39,7 +38,7 @@ describe("validateBulkPricingJson", () => {
       ),
     ).toEqual({
       ok: false,
-      error: "qtyBreakpoint phải là số ≥ 1.",
+      error: "qtyBreakpoint must be a number greater than or equal to 1.",
     });
 
     expect(
@@ -48,7 +47,7 @@ describe("validateBulkPricingJson", () => {
       ),
     ).toEqual({
       ok: false,
-      error: "priceAfterDiscount phải là số hợp lệ.",
+      error: "priceAfterDiscount must be a valid number.",
     });
 
     expect(
@@ -63,7 +62,7 @@ describe("validateBulkPricingJson", () => {
       ),
     ).toEqual({
       ok: false,
-      error: "bulkPrice (nếu có) phải là số.",
+      error: "bulkPrice, when provided, must be numeric.",
     });
   });
 

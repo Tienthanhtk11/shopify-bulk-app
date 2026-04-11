@@ -15,7 +15,7 @@ import {
   Text,
   TextField,
 } from "@shopify/polaris";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { authenticate } from "../shopify.server";
 import {
   buildSubscriptionStatusCounts,
@@ -23,7 +23,6 @@ import {
   type SubscriptionContractRow,
   type SubscriptionContractStatus,
 } from "../models/subscription-contracts.server";
-import { useEffect } from "react";
 
 type StatusFilter = "ALL" | SubscriptionContractStatus;
 
@@ -119,14 +118,6 @@ export default function SubscriptionsPage() {
   const [sortBy, setSortBy] = useState("NEXT_BILLING_DESC");
   const [pageSize, setPageSize] = useState("10");
   const [currentPage, setCurrentPage] = useState(1);
-  const statusSnapshotCount =
-    status === "ALL"
-      ? rows.length
-      : status === "ACTIVE"
-        ? counts.active
-        : status === "PAUSED"
-          ? counts.paused
-          : counts.cancelled;
 
   const filteredRows = useMemo(() => {
     const next = rows

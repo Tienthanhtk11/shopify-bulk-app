@@ -1,18 +1,12 @@
+import { readInternalAdminAccessConfig } from "../config.server";
+
 type SessionLike = {
   shop: string;
   email?: string | null;
 };
 
-function parseCsvEnv(value: string | undefined) {
-  return String(value || "")
-    .split(",")
-    .map((item) => item.trim().toLowerCase())
-    .filter(Boolean);
-}
-
 export function isInternalAdminSession(session: SessionLike) {
-  const allowedShops = parseCsvEnv(process.env.INTERNAL_ADMIN_SHOPS);
-  const allowedEmails = parseCsvEnv(process.env.INTERNAL_ADMIN_EMAILS);
+  const { shops: allowedShops, emails: allowedEmails } = readInternalAdminAccessConfig();
   const shop = session.shop.toLowerCase();
   const email = String(session.email || "").toLowerCase();
 

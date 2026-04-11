@@ -1,4 +1,5 @@
 import { createCookieSessionStorage, redirect } from "@remix-run/node";
+import { serverConfig } from "../config.server";
 import { authenticateInternalAdminAccount, getInternalAdminAccountById } from "./internal-admin-accounts.server";
 
 type InternalAdminSessionData = {
@@ -12,9 +13,9 @@ const internalAdminSessionStorage = createCookieSessionStorage<InternalAdminSess
     name: "__subbulk_internal_admin",
     httpOnly: true,
     path: "/",
-    sameSite: "lax",
-    secrets: [process.env.INTERNAL_ADMIN_SESSION_SECRET || "development-only-secret"],
-    secure: process.env.NODE_ENV === "production",
+    sameSite: "strict",
+    secrets: [serverConfig.internalAdminSessionSecret],
+    secure: serverConfig.isProduction,
     maxAge: 60 * 60 * 12,
   },
 });
@@ -83,5 +84,5 @@ export async function destroyInternalAdminUserSession(request: Request) {
 
 export function isInternalAdminHost(request: Request) {
   const url = new URL(request.url);
-  return url.hostname.toLowerCase() === "admin-app.thanhpt.online";
+  return serverConfig.internalAdminHosts.includes(url.hostname.toLowerCase());
 }

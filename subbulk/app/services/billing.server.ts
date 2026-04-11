@@ -1,6 +1,7 @@
 import type { AdminApiContext } from "@shopify/shopify-app-remix/server";
 import type { MerchantPlan } from "../../generated/prisma/client";
 import type { EntitledFeatureKey } from "./entitlements.shared";
+import { serverConfig } from "../config.server";
 import { getLatestMerchantPlan, recordMerchantEvent, upsertMerchantFromSession } from "../models/merchant.server";
 import { getAdminPlanCatalogItem } from "./admin-plan-catalog.shared";
 import { merchantCanWrite } from "./billing-access.shared";
@@ -86,11 +87,6 @@ const APP_SUBSCRIPTION_CANCEL_MUTATION = `#graphql
   }
 `;
 
-function isTruthyEnvFlag(value: string | undefined) {
-  const normalized = String(value || "").trim().toLowerCase();
-  return ["1", "true", "yes", "on", "ready"].includes(normalized);
-}
-
 function normalizeBillingInterval(value: FormDataEntryValue | string | null | undefined): BillingInterval {
   return String(value || "monthly").trim().toLowerCase() === "annual" ? "annual" : "monthly";
 }
@@ -168,7 +164,7 @@ function buildAdminAppReturnUrl(shopDomain: string | null | undefined) {
   const shopHandle = deriveShopHandle(shopDomain);
   if (!shopHandle) return null;
 
-  const appHandle = String(process.env.SHOPIFY_ADMIN_APP_HANDLE || "bmg-bulk-subscription").trim();
+  const appHandle = serverConfig.shopifyAdminAppHandle;
   if (!appHandle) return null;
 
   return `https://admin.shopify.com/store/${shopHandle}/apps/${appHandle}/app/settings`;
@@ -176,7 +172,7 @@ function buildAdminAppReturnUrl(shopDomain: string | null | undefined) {
 
 export function getShopifyBillingState() {
   return {
-    enabled: isTruthyEnvFlag(process.env.SHOPIFY_BILLING_TEST_FALLBACK_ENABLED),
+    enabled: serverConfig.shopifyBillingTestFallbackEnabled,
     testMode: true,
   };
 }
@@ -270,7 +266,7 @@ export async function createShopifySubscription(input: {
   }).then(() => upsertMerchantFromSession({ shop: input.shopDomain } as MerchantSessionLike));
 
   const variables = buildShopifySubscriptionInput({
-    appUrl: process.env.SHOPIFY_APP_URL || "",
+    appUrl: serverConfig.shopifyAppUrlString,
     planKey: input.planKey,
     billingInterval: input.billingInterval,
     currencyCode: merchant?.currencyCode || "USD",
@@ -324,7 +320,7 @@ export async function createShopifySubscription(input: {
         billingMode: billingState.testMode ? "test" : "live",
         errors: graphErrors,
         userErrors,
-        rawResult: result,
+        hasConfirmationUrl: Boolean(confirmationUrl),
       },
     });
 
@@ -339,8 +335,6 @@ export async function createShopifySubscription(input: {
       planKey: input.planKey,
       billingInterval: normalizedInterval,
       billingMode: billingState.testMode ? "test" : "live",
-      confirmationUrl,
-      returnUrl: variables.returnUrl,
       subscriptionId: payload?.appSubscription?.id || null,
       subscriptionName: payload?.appSubscription?.name || variables.name,
     },

@@ -23,12 +23,12 @@ describe("compliance.server", () => {
     });
 
     expect(summary).toEqual({
-      shopId: 954889,
-      shopDomain: "example.myshopify.com",
-      customerId: 191167,
-      dataRequestId: 9999,
+      webhook: "customers/data_request",
       ordersRequestedCount: 3,
+      hasCustomerReference: true,
+      hasDataRequestReference: true,
       containsProtectedCustomerData: false,
+      localCustomerDataStored: false,
       notes: [
         "App does not persist dedicated customer profiles in the local database.",
         "Compliance webhook payloads are stored as sanitized summaries only.",
@@ -48,9 +48,8 @@ describe("compliance.server", () => {
     });
 
     expect(summary).toEqual({
-      shopId: 954889,
-      shopDomain: "example.myshopify.com",
-      customerId: 191167,
+      webhook: "customers/redact",
+      hasCustomerReference: true,
       ordersToRedactCount: 2,
       action: "customer_data_redacted_in_local_audit_trail",
     });
@@ -63,17 +62,17 @@ describe("compliance.server", () => {
         shop_domain: "example.myshopify.com",
       }),
     ).toEqual({
-      shopId: 954889,
-      shopDomain: "example.myshopify.com",
+      webhook: "shop/redact",
+      hasShopReference: true,
       action: "shop_data_redacted",
+      localRetentionState: "merchant_profile_minimized_and_operational_data_wiped",
     });
   });
 
   it("builds a redacted payload envelope", () => {
-    expect(buildRedactedPayload("customers_redact", { shopDomain: "example.myshopify.com" })).toEqual({
+    expect(buildRedactedPayload("customers_redact")).toEqual({
       redacted: true,
       reason: "customers_redact",
-      shopDomain: "example.myshopify.com",
     });
   });
 });

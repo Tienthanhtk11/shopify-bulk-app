@@ -1,5 +1,4 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
-import { redirect } from "@remix-run/node";
 import {
   Form,
   Link,
@@ -19,8 +18,7 @@ import {
   Banner,
 } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
-import { useState, useCallback } from "react";
-import { useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { FloatingToast } from "../lib/floating-toast";
 import { authenticate } from "../shopify.server";
 import { getOrCreateWidgetSettings } from "../models/widget-settings.server";
@@ -61,19 +59,19 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const intervalsJson = String(fd.get("intervalsJson") || "[]");
 
   if (!title || !productGid.startsWith("gid://shopify/Product/")) {
-    return { error: "Tiêu đề và Product GID (gid://shopify/Product/...) là bắt buộc." };
+    return { error: "Title and Product GID (gid://shopify/Product/...) are required." };
   }
   if (!Number.isFinite(discountValue) || discountValue < 0) {
-    return { error: "Giá trị discount không hợp lệ." };
+    return { error: "Discount value is invalid." };
   }
   let planIntervals;
   try {
     planIntervals = JSON.parse(intervalsJson);
     if (!Array.isArray(planIntervals) || planIntervals.length === 0) {
-      return { error: "Cần ít nhất một tần suất trong JSON intervals." };
+      return { error: "At least one interval is required in the intervals JSON." };
     }
   } catch {
-    return { error: "JSON intervals không hợp lệ." };
+    return { error: "Intervals JSON is invalid." };
   }
 
   try {
@@ -85,7 +83,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       planIntervals,
     });
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Lỗi không xác định";
+    const msg = e instanceof Error ? e.message : "Unknown error.";
     return { error: msg };
   }
 
@@ -129,7 +127,7 @@ export default function NewOffer() {
     };
     const picker = w.shopify?.resourcePicker;
     if (!picker) {
-      alert("Mở app trong Shopify Admin để dùng Resource Picker.");
+      alert("Open the app inside Shopify Admin to use the Resource Picker.");
       return;
     }
     void (async () => {
@@ -148,16 +146,16 @@ export default function NewOffer() {
 
   return (
     <Page backAction={{ url: "/app/offers" }}>
-      <TitleBar title="Tạo subscription offer" />
+      <TitleBar title="Create Subscription Offer" />
       <BlockStack gap="400">
         {toast ? <FloatingToast message={toast.message} tone={toast.tone} /> : null}
-        <Banner tone="info" title="Gợi ý">
+        <Banner tone="info" title="Recommendation">
           <p>
-            Thông thường hãy dùng{" "}
-            <Link to="/app/subscription-rule">Thiết lập đăng ký</Link> (rule →
-            danh sách sản phẩm → selling plan chung). Trang này chỉ khi cần{" "}
-            <strong>một</strong> selling plan group cho <strong>một</strong>{" "}
-            sản phẩm (legacy).
+            In most cases, use{" "}
+            <Link to="/app/subscription-rule">Subscription Setup</Link> (rule →
+            product list → shared selling plan). Use this page only when you need{" "}
+            <strong>one</strong> selling plan group for <strong>one</strong>{" "}
+            product (legacy flow).
           </p>
         </Banner>
         <Card>
@@ -165,7 +163,7 @@ export default function NewOffer() {
             <FormLayout>
               <input type="hidden" name="discountType" value={discountType} />
               <TextField
-                label="Tên offer"
+                label="Offer name"
                 name="title"
                 value={title}
                 onChange={setTitle}
@@ -175,17 +173,17 @@ export default function NewOffer() {
               <input type="hidden" name="productGid" value={productGid} />
               <BlockStack gap="200">
                 <Text as="p" variant="bodySm" tone="subdued">
-                  Product đã chọn: {productGid || "—"}
+                  Selected product: {productGid || "—"}
                 </Text>
                 <Button type="button" onClick={pickProduct}>
-                  Chọn sản phẩm (Resource Picker)
+                  Select product (Resource Picker)
                 </Button>
               </BlockStack>
               <Select
-                label="Loại discount subscription"
+                label="Subscription discount type"
                 options={[
-                  { label: "Phần trăm (%)", value: "PERCENTAGE" },
-                  { label: "Số tiền cố định (trên chu kỳ / fulfillment — Shopify)", value: "FIXED" },
+                  { label: "Percentage (%)", value: "PERCENTAGE" },
+                  { label: "Fixed amount (per cycle / fulfillment in Shopify)", value: "FIXED" },
                 ]}
                 value={discountType}
                 onChange={setDiscountType}
@@ -193,8 +191,8 @@ export default function NewOffer() {
               <TextField
                 label={
                   discountType === "PERCENTAGE"
-                    ? "Phần trăm giảm"
-                    : "Số tiền giảm (decimal)"
+                    ? "Discount percentage"
+                    : "Discount amount (decimal)"
                 }
                 name="discountValue"
                 type="number"
@@ -212,10 +210,10 @@ export default function NewOffer() {
                 onChange={setIntervalsJson}
                 multiline={4}
                 autoComplete="off"
-                helpText='Ví dụ: [{"interval":"WEEK","intervalCount":1,"label":"1 week"}]'
+                helpText='Example: [{"interval":"WEEK","intervalCount":1,"label":"1 week"}]'
               />
               <Button variant="primary" submit loading={busy}>
-                Tạo trên Shopify
+                Create in Shopify
               </Button>
             </FormLayout>
           </Form>

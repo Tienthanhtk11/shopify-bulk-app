@@ -34,7 +34,7 @@ export async function addWidgetEnabledProduct(
   productGid: string,
 ) {
   if (!productGid.startsWith("gid://shopify/Product/")) {
-    throw new Error("Product GID không hợp lệ.");
+    throw new Error("Product GID is invalid.");
   }
   const title = await fetchProductTitle(admin, productGid);
   const mf = await setProductBooleanMetafield(
@@ -68,7 +68,7 @@ export async function removeWidgetEnabledProduct(
   const row = await prisma.widgetEnabledProduct.findFirst({
     where: { shop, id: rowId },
   });
-  if (!row) throw new Error("Không tìm thấy bản ghi.");
+  if (!row) throw new Error("Record not found.");
   const mf = await setProductBooleanMetafield(
     admin,
     row.productGid,
@@ -109,30 +109,30 @@ export function validateBulkPricingJson(raw: string): {
   try {
     parsed = JSON.parse(trimmed);
   } catch {
-    return { ok: false, error: "JSON không hợp lệ." };
+    return { ok: false, error: "JSON is invalid." };
   }
   if (!Array.isArray(parsed)) {
-    return { ok: false, error: "Bulk pricing phải là mảng JSON." };
+    return { ok: false, error: "Bulk pricing must be a JSON array." };
   }
   for (const row of parsed) {
     if (!row || typeof row !== "object") {
-      return { ok: false, error: "Mỗi phần tử phải là object." };
+      return { ok: false, error: "Each row must be an object." };
     }
     const o = row as Record<string, unknown>;
     const bp = Number(o.qtyBreakpoint);
     const pad = Number(o.priceAfterDiscount);
     if (!Number.isFinite(bp) || bp < 1) {
-      return { ok: false, error: "qtyBreakpoint phải là số ≥ 1." };
+      return { ok: false, error: "qtyBreakpoint must be a number greater than or equal to 1." };
     }
     if (!Number.isFinite(pad) || pad < 0) {
-      return { ok: false, error: "priceAfterDiscount phải là số hợp lệ." };
+      return { ok: false, error: "priceAfterDiscount must be a valid number." };
     }
     if (
       o.bulkPrice != null &&
       o.bulkPrice !== "" &&
       !Number.isFinite(Number(o.bulkPrice))
     ) {
-      return { ok: false, error: "bulkPrice (nếu có) phải là số." };
+      return { ok: false, error: "bulkPrice, when provided, must be numeric." };
     }
   }
   return { ok: true, normalized: JSON.stringify(parsed) };
@@ -145,13 +145,13 @@ export async function saveProductBulkPricing(
   jsonRaw: string,
 ) {
   if (!productGid.startsWith("gid://shopify/Product/")) {
-    throw new Error("Product GID không hợp lệ.");
+    throw new Error("Product GID is invalid.");
   }
   const inList = await prisma.widgetEnabledProduct.findFirst({
     where: { shop, productGid },
   });
   if (!inList) {
-    throw new Error("Sản phẩm chưa nằm trong danh sách widget.");
+    throw new Error("The product is not currently in the widget list.");
   }
   const v = validateBulkPricingJson(jsonRaw);
   if (!v.ok) throw new Error(v.error);
@@ -162,7 +162,7 @@ export async function saveProductBulkPricing(
     v.normalized,
   );
   if (!mf.ok) throw new Error(mf.error);
-  /* Đảm bảo storefront vẫn thấy widget: mỗi sản phẩm có metafield JSON bulk riêng (owner = productGid). */
+  /* Keep the storefront widget enabled. Each product owns its own bulk-pricing metafield. */
   const keepOn = await setProductBooleanMetafield(
     admin,
     productGid,

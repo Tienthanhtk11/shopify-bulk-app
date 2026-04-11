@@ -185,10 +185,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return {
         ok: true as const,
         bulkSaved: true as const,
-        message: "Đã lưu bulk pricing cho sản phẩm.",
+        message: "Bulk pricing saved for the product.",
       };
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Lỗi không xác định";
+      const msg = e instanceof Error ? e.message : "Unknown error.";
       return { error: msg };
     }
   }
@@ -204,7 +204,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (productGids.length === 0) {
     return {
       error:
-        "Thêm ít nhất một sản phẩm ở bước 2. Selling plan sẽ áp dụng cho toàn bộ danh sách đó.",
+        "Add at least one product in step 2. The selling plan will apply to that full list.",
     };
   }
 
@@ -212,10 +212,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   try {
     planIntervals = JSON.parse(intervalsJson);
     if (!Array.isArray(planIntervals) || planIntervals.length === 0) {
-      return { error: "Cần ít nhất một interval trong JSON (bước 3)." };
+      return { error: "At least one interval is required in the JSON for step 3." };
     }
   } catch {
-    return { error: "JSON intervals không hợp lệ." };
+    return { error: "Intervals JSON is invalid." };
   }
 
   for (const plan of planIntervals) {
@@ -223,13 +223,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       plan.discountType !== "PERCENTAGE" &&
       plan.discountType !== "FIXED"
     ) {
-      return { error: "Mỗi selling plan phải có loại discount hợp lệ." };
+      return { error: "Each selling plan must use a valid discount type." };
     }
     if (
       !Number.isFinite(Number(plan.discountValue)) ||
       Number(plan.discountValue) < 0
     ) {
-      return { error: "Mỗi selling plan phải có discount value hợp lệ." };
+      return { error: "Each selling plan must have a valid discount value." };
     }
   }
 
@@ -238,7 +238,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     firstPlan?.discountType === "FIXED" ? "FIXED" : "PERCENTAGE";
   const discountValue = Number(firstPlan?.discountValue ?? 0);
   if (!Number.isFinite(discountValue) || discountValue < 0) {
-    return { error: "Giá trị discount không hợp lệ." };
+    return { error: "Discount value is invalid." };
   }
 
   const normalizedIntervalsJson = JSON.stringify(planIntervals);
@@ -279,7 +279,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     let rule = await getSubscriptionRule(session.shop);
     if (!rule) {
-      return { error: "Không đọc được rule sau khi lưu." };
+      return { error: "Unable to read the rule after saving." };
     }
 
     if (shouldRecreateGroup && rule.sellingPlanGroupGid) {
@@ -320,11 +320,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       ok: true as const,
       message:
         shouldRecreateGroup
-          ? "Đã rebuild selling plan group trên Shopify và đồng bộ toàn bộ sản phẩm trong danh sách."
-          : "Đã lưu. Selling plan trên Shopify áp dụng cho mọi sản phẩm ở bước 2.",
+          ? "Rebuilt the selling plan group in Shopify and synced every product in the list."
+          : "Saved. The Shopify selling plan now applies to every product from step 2.",
     };
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Lỗi không xác định";
+    const msg = e instanceof Error ? e.message : "Unknown error.";
     return { error: msg };
   }
 };

@@ -2,7 +2,6 @@ import type {
   ActionFunctionArgs,
   LoaderFunctionArgs,
 } from "@remix-run/node";
-import { redirect } from "@remix-run/node";
 import { Form, Link, useLoaderData, useNavigation } from "@remix-run/react";
 import {
   Page,
@@ -12,7 +11,6 @@ import {
   Select,
   Button,
   Banner,
-  InlineStack,
 } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { useState } from "react";
@@ -69,7 +67,7 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
   if (intent === "defaultPlan") {
     const planGid = String(fd.get("defaultSellingPlanGid") || "");
     if (!planGid.startsWith("gid://shopify/SellingPlan/")) {
-      return { error: "Selling plan GID không hợp lệ." };
+      return { error: "Selling plan GID is invalid." };
     }
     await updateOfferDefaultPlan(session.shop, id, planGid);
     return { ok: true };
@@ -104,7 +102,7 @@ export default function OfferDetail() {
                 target="_blank"
                 rel="noreferrer"
               >
-                Mở trong Admin
+                Open in Admin
               </a>
             </Text>
             <Text as="p" variant="bodySm" tone="subdued">
@@ -125,7 +123,7 @@ export default function OfferDetail() {
                   Default plan (Deliver every…)
                 </Text>
                 <Select
-                  label="Selling plan mặc định"
+                  label="Default selling plan"
                   name="defaultSellingPlanGid"
                   options={plans.map((p) => ({
                     label: p.name,
@@ -135,14 +133,14 @@ export default function OfferDetail() {
                   onChange={setDefaultPlan}
                 />
                 <Button submit variant="primary" loading={busy}>
-                  Lưu default plan
+                  Save default plan
                 </Button>
               </BlockStack>
             </Form>
           </Card>
         ) : (
-          <Banner tone="warning" title="Không tải được plans">
-            Kiểm tra quyền read_purchase_options và ID group.
+          <Banner tone="warning" title="Unable to load plans">
+            Check the `read_purchase_options` permission and the group ID.
           </Banner>
         )}
 
@@ -150,12 +148,12 @@ export default function OfferDetail() {
           <Form method="post">
             <input type="hidden" name="intent" value="delete" />
             <Button tone="critical" submit loading={busy}>
-              Xóa offer (chỉ DB — group trên Shopify giữ nguyên)
+              Delete offer (database only, Shopify group remains unchanged)
             </Button>
           </Form>
         </Card>
 
-        <Link to="/app/offers">← Quay lại danh sách</Link>
+        <Link to="/app/offers">← Back to list</Link>
       </BlockStack>
     </Page>
   );

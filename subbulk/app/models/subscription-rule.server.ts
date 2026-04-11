@@ -26,7 +26,7 @@ export function parseExplicitGids(json: string): string[] {
   }
 }
 
-/** Product GIDs mà rule sẽ gắn selling plan group. */
+/** Product GIDs that should be attached to the rule's selling plan group. */
 export async function resolveRuleProductGids(
   shop: string,
   scope: ProductScope,
@@ -158,7 +158,7 @@ function buildSellingPlansToCreate(
   });
 }
 
-/** Đồng bộ danh sách product trên selling plan group với danh sách mong muốn. */
+/** Sync the selling plan group's product list with the desired set. */
 export async function syncRuleProductsOnShopify(
   admin: AdminApiContext,
   sellingPlanGroupGid: string,
@@ -318,7 +318,7 @@ export async function createShopifyGroupForRule(
 ) {
   if (!input.productGids.length) {
     throw new Error(
-      "Chưa có sản phẩm nào trong phạm vi rule. Thêm sản phẩm vào «Sản phẩm widget» (hoặc chọn sản phẩm cụ thể) rồi thử lại.",
+      "No products are currently in the rule scope. Add products to Widget Products, or choose explicit products, then try again.",
     );
   }
 
@@ -383,7 +383,7 @@ export async function createShopifyGroupForRule(
 
   const group = payload?.sellingPlanGroup;
   if (!group?.id) {
-    throw new Error("Không tạo được selling plan group");
+    throw new Error("Unable to create the selling plan group.");
   }
 
   for (const gid of input.productGids) {
@@ -399,7 +399,7 @@ export async function createShopifyGroupForRule(
   };
 }
 
-/** Sau khi thêm/gỡ sản phẩm widget: đồng bộ membership nếu rule dùng WIDGET_ENABLED. */
+/** After widget product changes, sync membership when the rule uses WIDGET_ENABLED. */
 export async function syncWidgetScopeRuleToShopify(
   admin: AdminApiContext,
   shop: string,

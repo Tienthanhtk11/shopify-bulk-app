@@ -411,7 +411,7 @@ export async function redactCustomerComplianceData(shopDomain: string) {
       },
     },
     data: {
-      payloadJson: safeJson(buildRedactedPayload("customers_redact", { shopDomain })),
+      payloadJson: safeJson(buildRedactedPayload("customers_redact")),
     },
   });
 }
@@ -424,13 +424,13 @@ export async function minimizeMerchantRetentionData(shopDomain: string) {
     prisma.merchantEvent.updateMany({
       where: { merchantId: merchant.id },
       data: {
-        payloadJson: safeJson(buildRedactedPayload("shop_redact", { shopDomain })),
+        payloadJson: safeJson(buildRedactedPayload("shop_redact")),
       },
     }),
     prisma.merchantPlan.updateMany({
       where: { merchantId: merchant.id },
       data: {
-        rawPayloadJson: safeJson(buildRedactedPayload("shop_redact", { shopDomain })),
+        rawPayloadJson: safeJson(buildRedactedPayload("shop_redact")),
       },
     }),
     prisma.merchantDataDeletionRequest.updateMany({

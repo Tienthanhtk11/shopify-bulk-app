@@ -1,6 +1,5 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import type { SubscriptionOffer } from "../../generated/prisma/client";
-import { redirect } from "@remix-run/node";
 import {
   Form,
   useActionData,
@@ -37,10 +36,10 @@ import { assertMerchantWriteAccess } from "../services/billing.server";
 import { listOffers } from "../models/subscription-offer.server";
 import { syncWidgetScopeRuleToShopify } from "../models/subscription-rule.server";
 
-/** Shopify product search: loại numeric id khỏi picker (tối đa để tránh query quá dài). */
+/** Shopify product search: exclude numeric IDs from the picker to keep queries short. */
 const RESOURCE_PICKER_MAX_EXCLUDED_IDS = 40;
 
-/** Mẫu JSON bulk pricing (đơn vị giá = đơn vị tiền tệ store; chỉnh số cho từng SKU). */
+/** Sample bulk pricing JSON. Values use the store currency and should be customized per SKU. */
 export const BULK_PRICING_JSON_TEMPLATE = `[
   {
     "qtyBreakpoint": 1,
@@ -113,10 +112,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       try {
         ids = JSON.parse(raw || "[]");
       } catch {
-        return { ok: false, error: "Dữ liệu sản phẩm chọn không phải JSON hợp lệ." };
+        return { ok: false, error: "Selected product data is not valid JSON." };
       }
       if (!Array.isArray(ids) || ids.length === 0) {
-        return { ok: false, error: "Chọn ít nhất một sản phẩm." };
+        return { ok: false, error: "Select at least one product." };
       }
       const gids = ids.filter(
         (id): id is string =>
@@ -126,7 +125,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       if (gids.length === 0) {
         return {
           ok: false,
-          error: "Không có Product GID hợp lệ (gid://shopify/Product/...).",
+          error: "No valid Product GID was provided (gid://shopify/Product/...).",
         };
       }
 
@@ -145,8 +144,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
           ok: true,
           message:
             alreadyIn.length === 1
-              ? "Sản phẩm này đã có trong danh sách — không thêm trùng."
-              : `Tất cả ${alreadyIn.length} sản phẩm chọn đã có trong danh sách — không thêm trùng.`,
+              ? "This product is already in the list and was skipped."
+              : `All ${alreadyIn.length} selected products are already in the list and were skipped.`,
           clearSelection: true,
         };
       }
@@ -165,18 +164,18 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         return {
           ok: false,
           error:
-            errs.join(" · ") || "Không thêm được sản phẩm nào (kiểm tra quyền API).",
+            errs.join(" · ") || "No products could be added. Check API permissions.",
         };
       }
       const dupPart =
         alreadyIn.length > 0
-          ? ` Đã bỏ qua ${alreadyIn.length} sản phẩm đã có trong danh sách.`
+          ? ` Skipped ${alreadyIn.length} products already in the list.`
           : "";
       const errPart = errs.length
-        ? ` Một số lỗi: ${errs.slice(0, 3).join(" · ")}${errs.length > 3 ? "…" : ""}`
+        ? ` Some errors: ${errs.slice(0, 3).join(" · ")}${errs.length > 3 ? "…" : ""}`
         : "";
       const msg =
-        `Đã thêm ${okCount} sản phẩm mới và bật widget.${dupPart}${errPart}`;
+        `Added ${okCount} new products and enabled the widget.${dupPart}${errPart}`;
       try {
         await syncWidgetScopeRuleToShopify(admin, session.shop);
       } catch (syncErr) {
@@ -196,7 +195,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       } catch (syncErr) {
         console.error("[widget-products] sync subscription rule", syncErr);
       }
-      return { ok: true, message: "Đã gỡ sản phẩm và tắt widget." };
+      return { ok: true, message: "Removed the product and disabled the widget." };
     }
     if (intent === "saveBulk") {
       const productGid = String(fd.get("productGid") || "").trim();
@@ -205,11 +204,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return redirect("/app/widget-products");
     }
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Lỗi không xác định";
+    const msg = e instanceof Error ? e.message : "Unknown error.";
     return { ok: false, error: msg };
   }
 
-  return { ok: false, error: "Thao tác không hợp lệ." };
+  return { ok: false, error: "Invalid action." };
 };
 
 function productAdminUrl(shop: string, productGid: string) {
@@ -285,7 +284,7 @@ export default function WidgetProductsPage() {
     };
     const picker = w.shopify?.resourcePicker;
     if (!picker) {
-      alert("Mở app trong Shopify Admin để dùng Resource Picker.");
+      alert("Open the app inside Shopify Admin to use the Resource Picker.");
       return;
     }
     void (async () => {
@@ -326,7 +325,7 @@ export default function WidgetProductsPage() {
 
   return (
     <Page>
-      <TitleBar title="Sản phẩm dùng widget" />
+      <TitleBar title="Widget Products" />
       <BlockStack gap="400">
         {toast ? <FloatingToast message={toast.message} tone={toast.tone} /> : null}
 
@@ -343,77 +342,76 @@ export default function WidgetProductsPage() {
           </Banner>
         ) : null}
 
-        <Banner tone="info" title="Vị trí trong quy trình">
+        <Banner tone="info" title="Where this fits in the workflow">
           <BlockStack gap="200">
             <Text as="p" variant="bodyMd">
-              <strong>Đăng ký (subscribe):</strong> cấu hình tại{" "}
-              <Link url="/app/subscription-rule">Thiết lập đăng ký</Link> —{" "}
-              <em>rule → danh sách sản phẩm → selling plan chung</em>. Trang{" "}
-              <strong>Sản phẩm widget</strong> này chủ yếu để{" "}
-              <strong>bật block theme</strong> (metafield) và{" "}
-              <strong>bulk pricing</strong> JSON; danh sách có thể trùng với bước
-              2 bên «Thiết lập đăng ký» nhưng không bắt buộc giống hệt.
+              <strong>Subscriptions:</strong> configure them in{" "}
+              <Link url="/app/subscription-rule">Subscription Setup</Link> —{" "}
+              <em>rule → product list → shared selling plan</em>. This{" "}
+              <strong>Widget Products</strong> page is mainly for enabling the{" "}
+              <strong>theme block</strong> metafield and managing the{" "}
+              <strong>bulk pricing</strong> JSON. The list can overlap with step 2 in Subscription Setup, but it does not need to match exactly.
             </Text>
             <Text as="p" variant="bodySm" tone="subdued">
-              Nếu rule cũ dùng chế độ «theo Sản phẩm widget», thêm/gỡ SP ở đây
-              vẫn có thể đồng bộ selling plan (legacy).
+              If a legacy rule uses the Widget Products scope, adding or removing
+              products here can still sync the selling plan membership.
             </Text>
           </BlockStack>
         </Banner>
 
-        <Banner tone="info" title="Vì sao giỏ hàng không khớp bảng giá widget?">
+        <Banner tone="info" title="Why cart pricing does not match the widget table">
           <BlockStack gap="200">
             <Text as="p" variant="bodyMd">
-              Shopify tính dòng giỏ theo{" "}
+              Shopify calculates cart lines from the{" "}
               <Text as="span" fontWeight="semibold">
-                giá variant
+                variant price
               </Text>{" "}
-              (một lần) hoặc{" "}
+              for one-time purchases, or from{" "}
               <Text as="span" fontWeight="semibold">
                 variant + selling plan
               </Text>{" "}
-              (đăng ký). Metafield{" "}
+              for subscriptions. The{" "}
               <Text as="span" fontWeight="semibold">
                 bulk_pricing
               </Text>{" "}
-              chỉ dùng để hiển thị trên theme —{" "}
+              metafield is only used for storefront display and{" "}
               <Text as="span" fontWeight="semibold">
-                không tự đổi giá checkout
+                does not automatically change checkout pricing
               </Text>
               .
             </Text>
             <Text as="p" variant="bodyMd">
               <Text as="span" fontWeight="semibold">
-                Đăng ký:
+                Subscriptions:
               </Text>{" "}
-              cần{" "}
+              require a{" "}
               <Text as="span" fontWeight="semibold">
                 Selling plan group
               </Text>{" "}
-              gắn sản phẩm (Shopify Admin API:{" "}
+              attached to the product (Shopify Admin API:{" "}
               <Link
                 url="https://shopify.dev/docs/api/admin-graphql/latest/mutations/sellingPlanGroupCreate"
                 target="_blank"
               >
                 sellingPlanGroupCreate
               </Link>
-              ). Trong SubBulk dùng{" "}
-              <Link url="/app/subscription-rule">Thiết lập đăng ký</Link> để
-              gắn selling plan cho cả danh sách sản phẩm; hoặc legacy{" "}
-              <Link url="/app/offers/new">offer từng SKU</Link>.
+              ). In SubBulk, use{" "}
+              <Link url="/app/subscription-rule">Subscription Setup</Link> to
+              attach a selling plan to a shared product list, or use the legacy{" "}
+              <Link url="/app/offers/new">per-SKU offer flow</Link>.
             </Text>
             <Text as="p" variant="bodyMd">
               <Text as="span" fontWeight="semibold">
-                Một lần + bulk:
+                One-time + bulk:
               </Text>{" "}
-              đồng bộ giá variant với bảng tier, hoặc dùng{" "}
+              sync the variant price with the tier table, or use{" "}
               <Link
                 url="https://shopify.dev/docs/api/functions/latest/cart-transform"
                 target="_blank"
               >
                 Cart Transform / Discount Function
               </Link>{" "}
-              để chỉnh giá theo số lượng trên giỏ.
+              to adjust pricing based on cart quantity.
             </Text>
           </BlockStack>
         </Banner>
@@ -421,29 +419,29 @@ export default function WidgetProductsPage() {
         <Card>
           <BlockStack gap="300">
             <Text as="h2" variant="headingMd">
-              Danh sách
+              Product list
             </Text>
             <Text as="p" variant="bodyMd" tone="subdued">
-              Chỉ sản phẩm trong danh sách mới có metafield{" "}
+              Only products in this list receive the metafield{" "}
               <Text as="span" fontWeight="semibold">
                 app.subbulk_widget_enabled = true
               </Text>{" "}
-              và block theme mới render widget. Chọn{" "}
+              and render the widget theme block. Select{" "}
               <Text as="span" fontWeight="semibold">
-                nhiều sản phẩm
+                multiple products
               </Text>{" "}
-              trong Resource Picker rồi thêm một lần. Sản phẩm đã có trong danh
-              sách được{" "}
+              in the Resource Picker and add them in one action. Products already
+              in the list are{" "}
               <Text as="span" fontWeight="semibold">
-                ẩn trong picker
+                hidden in the picker
               </Text>{" "}
-              (tối đa {RESOURCE_PICKER_MAX_EXCLUDED_IDS} mục) hoặc hiện{" "}
+              for up to {RESOURCE_PICKER_MAX_EXCLUDED_IDS} items, or shown as{" "}
               <Text as="span" fontWeight="semibold">
-                đã chọn
+                already selected
               </Text>{" "}
-              khi danh sách dài; trùng khi gửi form sẽ{" "}
+              when the list is longer. Duplicate submissions are{" "}
               <Text as="span" fontWeight="semibold">
-                bỏ qua
+                skipped
               </Text>
               .
             </Text>
@@ -456,10 +454,10 @@ export default function WidgetProductsPage() {
               />
               <BlockStack gap="200">
                 <Text as="p" variant="bodySm" tone="subdued">
-                  Đã chọn:{" "}
+                  Selected:{" "}
                   {selectedGids.length === 0
                     ? "—"
-                    : `${selectedGids.length} sản phẩm`}
+                    : `${selectedGids.length} products`}
                 </Text>
                 {selectedGids.length > 0 ? (
                   <Box
@@ -481,13 +479,13 @@ export default function WidgetProductsPage() {
                 ) : null}
                 <InlineStack gap="300" blockAlign="center" wrap>
                   <Button onClick={pickProducts}>
-                    Chọn sản phẩm (có thể nhiều)
+                    Select products
                   </Button>
                   <Button
                     onClick={() => setSelectedGids([])}
                     disabled={selectedGids.length === 0}
                   >
-                    Bỏ chọn
+                    Clear selection
                   </Button>
                   <Button
                     variant="primary"
@@ -495,7 +493,7 @@ export default function WidgetProductsPage() {
                     disabled={selectedGids.length === 0 || busy}
                     loading={busy}
                   >
-                    Thêm vào danh sách
+                    Add to list
                   </Button>
                 </InlineStack>
               </BlockStack>
@@ -510,27 +508,28 @@ export default function WidgetProductsPage() {
                 Bulk pricing (JSON)
               </Text>
               <Text as="p" variant="bodyMd" tone="subdued">
-                Mỗi sản phẩm có một metafield JSON riêng trên chính sản phẩm đó (không dùng chung một bảng cho cả cửa hàng). Metafield{" "}
+                Each product stores its own JSON metafield. There is no shared
+                bulk pricing table for the entire store. Metafield:{" "}
                 <Text as="span" fontWeight="semibold">
                   app.bulk_pricing
                 </Text>
-                . Mỗi phần tử:{" "}
+                . Each row contains:{" "}
                 <Text as="span" variant="bodySm" fontWeight="semibold">
                   qtyBreakpoint
                 </Text>{" "}
-                (số lượng tối thiểu áp mức giá),{" "}
+                (minimum quantity for the tier),{" "}
                 <Text as="span" variant="bodySm" fontWeight="semibold">
                   priceAfterDiscount
                 </Text>{" "}
-                (đơn giá sau giảm),{" "}
+                (unit price after discount),{" "}
                 <Text as="span" variant="bodySm" fontWeight="semibold">
                   bulkPrice
                 </Text>{" "}
-                (giá so sánh / gạch ngang — tuỳ chọn).
+                (compare-at / strike-through price, optional).
               </Text>
               <Box padding="300" background="bg-surface-secondary" borderRadius="200">
                 <Text as="p" variant="headingSm">
-                  JSON mẫu (copy chỉnh giá theo từng sản phẩm)
+                  Sample JSON (copy and adjust pricing per product)
                 </Text>
                 <pre
                   style={{
@@ -556,9 +555,9 @@ export default function WidgetProductsPage() {
                 />
                 <InlineStack gap="200">
                   <Button variant="primary" submit loading={busy}>
-                    Lưu bulk pricing
+                    Save bulk pricing
                   </Button>
-                  <Button url="/app/widget-products">Hủy</Button>
+                  <Button url="/app/widget-products">Cancel</Button>
                 </InlineStack>
               </Form>
             </BlockStack>
@@ -568,11 +567,11 @@ export default function WidgetProductsPage() {
         <Card>
           <BlockStack gap="300">
             <Text as="h2" variant="headingMd">
-              Sản phẩm đã bật ({products.length})
+              Enabled products ({products.length})
             </Text>
             {products.length === 0 ? (
               <Text as="p" tone="subdued">
-                Chưa có sản phẩm nào.
+                No products yet.
               </Text>
             ) : (
               <BlockStack gap="300">
@@ -586,15 +585,15 @@ export default function WidgetProductsPage() {
                     <BlockStack gap="200">
                       <InlineStack gap="200" blockAlign="center" wrap>
                         <Text as="p" variant="bodyMd" fontWeight="semibold">
-                          {p.productTitle || "Sản phẩm"}
+                          {p.productTitle || "Product"}
                         </Text>
                         {offerGidSet.has(p.productGid) ? (
                           <Badge tone="success">
-                            Đã có Subscription offer (selling plan)
+                            Subscription offer already created
                           </Badge>
                         ) : (
                           <Badge tone="warning">
-                            Chưa có offer — subscribe trên giỏ cần tạo offer
+                            No offer yet. Subscriptions in cart require one.
                           </Badge>
                         )}
                       </InlineStack>
@@ -606,12 +605,12 @@ export default function WidgetProductsPage() {
                           url={productAdminUrl(shop, p.productGid)}
                           target="_blank"
                         >
-                          Mở trong Shopify Admin
+                          Open in Shopify Admin
                         </Button>
                         <Button
                           url={`/app/widget-products?bulk=${encodeURIComponent(p.productGid)}`}
                         >
-                          Sửa bulk pricing
+                          Edit bulk pricing
                         </Button>
                         <Form method="post">
                           <input type="hidden" name="intent" value="remove" />
@@ -621,7 +620,7 @@ export default function WidgetProductsPage() {
                             tone="critical"
                             loading={busy}
                           >
-                            Gỡ khỏi danh sách
+                            Remove from list
                           </Button>
                         </Form>
                       </InlineStack>

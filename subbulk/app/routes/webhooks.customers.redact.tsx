@@ -10,7 +10,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const { payload, topic, shop } = await authenticate.webhook(request);
   const summary = summarizeCustomersRedactPayload(payload);
 
-  console.log(`Received ${topic} webhook for ${shop}`);
+  console.info(`[compliance] Received ${topic} webhook for ${shop}`);
 
   await redactCustomerComplianceData(shop);
 

@@ -2,7 +2,6 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { Form, useActionData, useLoaderData, useNavigation } from "@remix-run/react";
 import { TitleBar } from "@shopify/app-bridge-react";
 import {
-  Banner,
   BlockStack,
   Box,
   Button,

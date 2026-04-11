@@ -2,6 +2,7 @@
   "name": "subbulk",
   "private": true,
   "scripts": {
+    "config:generate:customer-account": "node --import tsx ./scripts/generate-customer-account-config.ts",
     "build": "remix vite:build",
     "test": "vitest run",
     "bench:admin-vitals": "node ./scripts/admin-web-vitals-benchmark.mjs",
@@ -15,12 +16,17 @@
     "docker-start": "npm run setup && npm run start",
     "setup": "prisma generate && prisma migrate deploy",
     "audit:billing-live": "node --import tsx ./scripts/billing-live-audit.ts",
-    "lint": "eslint --cache --cache-location ./node_modules/.cache/eslint .",
+    "admin:bootstrap": "node --import tsx ./scripts/admin-bootstrap.ts",
+    "compliance:scrub-history": "node --import tsx ./scripts/scrub-compliance-history.ts",
+    "lint": "eslint --cache --cache-location ./.eslintcache .",
     "shopify": "shopify",
     "prisma": "prisma",
     "graphql-codegen": "graphql-codegen",
     "vite": "vite"
   },
+  "prebuild": "npm run config:generate:customer-account",
+  "predeploy": "npm run config:generate:customer-account",
+  "predev": "npm run config:generate:customer-account",
   "type": "module",
   "engines": {
     "node": ">=20.19 <22 || >=22.12"

@@ -7,7 +7,6 @@ import {
   useNavigation,
 } from "@remix-run/react";
 import {
-  Banner,
   BlockStack,
   Box,
   Button,
@@ -23,6 +22,7 @@ import {
 } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { useEffect, useMemo, useState } from "react";
+import { serverConfig } from "../config.server";
 import { FloatingToast } from "../lib/floating-toast";
 import {
   getOrCreateWidgetSettings,
@@ -81,9 +81,13 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const intent = String(fd.get("intent") || "widget");
 
   if (intent === "enableBulkDiscount") {
-    const functionId = "019d5fb9-d719-7a6f-973a-f71f5521a6fb";
+    const functionId = serverConfig.shopifyBulkDiscountFunctionId;
     if (!functionId) {
-      return { ok: false, error: "Không tìm thấy Function ID môi trường. Hãy khởi động lại ứng dụng." };
+      return {
+        ok: false,
+        error:
+          "Missing SHOPIFY_BULK_DISCOUNT_FUNCTION_ID. Update the environment before enabling automatic bulk discounts.",
+      };
     }
 
     try {
@@ -115,16 +119,25 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       
       // Check for generic GraphQL root errors (like Access Denied/Missing Scopes)
       if (responseJson.errors && responseJson.errors.length > 0) {
-        return { ok: false, error: "Lỗi GraphQL: " + responseJson.errors.map((e: any) => e.message).join(", ") };
+        return {
+          ok: false,
+          error: "GraphQL error: " + responseJson.errors.map((e: any) => e.message).join(", "),
+        };
       }
 
       const errors = responseJson.data?.discountAutomaticAppCreate?.userErrors;
       if (errors && errors.length > 0) {
-        return { ok: false, error: "Lỗi tạo Discount: " + errors.map((e: any) => e.message).join(", ") };
+        return {
+          ok: false,
+          error: "Failed to create the discount: " + errors.map((e: any) => e.message).join(", "),
+        };
       }
-      return { ok: true, successMsg: "Đã kích hoạt chế độ tự động tính giá Bulk thành công trên toàn bộ cửa hàng!" };
+      return {
+        ok: true,
+        successMsg: "Automatic bulk pricing has been enabled for the store.",
+      };
     } catch (e: any) {
-      return { ok: false, error: e.message || "Lỗi tạo discount" };
+      return { ok: false, error: e.message || "Failed to create the discount." };
     }
   }
 
@@ -134,11 +147,11 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     );
     const dv = String(fd.get("defaultSubscriptionDiscountValue") || "").trim();
     if (dt !== "PERCENTAGE" && dt !== "FIXED") {
-      return { ok: false, error: "Loại discount không hợp lệ." };
+      return { ok: false, error: "Invalid discount type." };
     }
     const num = Number(dv);
     if (!Number.isFinite(num) || num < 0) {
-      return { ok: false, error: "Giá trị discount phải là số >= 0." };
+      return { ok: false, error: "Discount value must be a number greater than or equal to 0." };
     }
     await updateWidgetSettings(session.shop, {
       defaultSubscriptionDiscountType: dt,

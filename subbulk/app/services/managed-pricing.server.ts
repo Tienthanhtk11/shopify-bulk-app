@@ -1,17 +1,11 @@
+import { readManagedPricingConfig } from "../config.server";
+
 function normalizeStoreHandle(shopDomain: string) {
   return shopDomain.replace(/\.myshopify\.com$/i, "").trim().toLowerCase();
 }
 
-function isTruthyEnvFlag(value: string | undefined) {
-  const normalized = String(value || "").trim().toLowerCase();
-  return ["1", "true", "yes", "on", "ready"].includes(normalized);
-}
-
 export function getManagedPricingPageState(shopDomain: string) {
-  const appHandle = String(process.env.SHOPIFY_MANAGED_PRICING_APP_HANDLE || "").trim();
-  const managedPricingReady = isTruthyEnvFlag(
-    process.env.SHOPIFY_MANAGED_PRICING_READY,
-  );
+  const { appHandle, ready: managedPricingReady } = readManagedPricingConfig();
 
   if (!appHandle) {
     return {

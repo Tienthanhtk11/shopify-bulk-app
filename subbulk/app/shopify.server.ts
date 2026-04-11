@@ -5,14 +5,15 @@ import {
   shopifyApp,
 } from "@shopify/shopify-app-remix/server";
 import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prisma";
+import { serverConfig } from "./config.server";
 import prisma from "./db.server";
 
 const shopify = shopifyApp({
-  apiKey: process.env.SHOPIFY_API_KEY,
-  apiSecretKey: process.env.SHOPIFY_API_SECRET || "",
+  apiKey: serverConfig.shopifyApiKey,
+  apiSecretKey: serverConfig.shopifyApiSecret,
   apiVersion: ApiVersion.January25,
-  scopes: process.env.SCOPES?.split(","),
-  appUrl: process.env.SHOPIFY_APP_URL || "",
+  scopes: serverConfig.scopes,
+  appUrl: serverConfig.shopifyAppUrlString,
   authPathPrefix: "/auth",
   sessionStorage: new PrismaSessionStorage(prisma),
   distribution: AppDistribution.AppStore,
@@ -20,8 +21,8 @@ const shopify = shopifyApp({
     unstable_newEmbeddedAuthStrategy: true,
     expiringOfflineAccessTokens: true,
   },
-  ...(process.env.SHOP_CUSTOM_DOMAIN
-    ? { customShopDomains: [process.env.SHOP_CUSTOM_DOMAIN] }
+  ...(serverConfig.shopCustomDomain
+    ? { customShopDomains: [serverConfig.shopCustomDomain] }
     : {}),
 });
 
