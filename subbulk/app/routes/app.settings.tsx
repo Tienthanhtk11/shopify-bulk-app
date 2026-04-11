@@ -23,8 +23,6 @@ import {
 } from "@shopify/polaris";
 import { TitleBar } from "@shopify/app-bridge-react";
 import { useEffect, useMemo, useState } from "react";
-import widgetRuntimeSource from "../lib/subbulk-widget-runtime.js?raw";
-import widgetStylesSource from "../../extensions/subbulk-buy-box/assets/subbulk-widget.css?raw";
 import { FloatingToast } from "../lib/floating-toast";
 import {
   getOrCreateWidgetSettings,
@@ -214,7 +212,7 @@ function buildWidgetPreviewPayload(input: {
   const discountValue = Number(input.defaultDiscValue);
   const safeDiscountValue = Number.isFinite(discountValue) && discountValue >= 0 ? discountValue : 0;
   const renderState = resolveWidgetRenderState({
-    showWidgetOnProductPage: input.showWidgetOnProductPage,
+    showWidgetOnProductPage: true,
     widgetEnabledForProduct: true,
     productHasSubscriptionPlan: true,
   });
@@ -256,52 +254,52 @@ function buildWidgetPreviewPayload(input: {
 }
 
 function buildWidgetPreviewConfig(previewPayload: ReturnType<typeof buildWidgetPreviewPayload>) {
+  const baseUnitPrice = 2629.95;
+  const percentDiscount =
+    previewPayload.preview.discountMode === "percent"
+      ? previewPayload.preview.subscriptionPercent
+      : 0;
+  const fixedDiscount =
+    previewPayload.preview.discountMode === "fixed"
+      ? previewPayload.preview.subscriptionFixed
+      : 0;
+  const subscriptionCheckoutRaw =
+    previewPayload.preview.discountMode === "fixed"
+      ? baseUnitPrice - fixedDiscount
+      : baseUnitPrice * (1 - percentDiscount / 100);
+  const subscriptionCheckout = Math.max(
+    0,
+    Math.round(subscriptionCheckoutRaw * 100) / 100,
+  );
+
   return {
     productId: "1001",
-    moneyFormat: "${{amount}}",
-    currency: "USD",
-    variantId: "401",
-    variantUnitPrice: 39.99,
-    variantPrices: [
-      { id: "401", price: 39.99 },
-      { id: "402", price: 49.99 },
-    ],
-    bulkTiers: [
-      { qtyBreakpoint: 1, bulkPrice: 39.99, priceAfterDiscount: 39.99 },
-      { qtyBreakpoint: 3, bulkPrice: 37.49, priceAfterDiscount: 37.49 },
-      { qtyBreakpoint: 6, bulkPrice: 33.99, priceAfterDiscount: 33.99 },
-    ],
-    sellingPlanGroups: [
-      {
-        id: "mock-group-1",
-        name: "Subscribe & save",
-        plans: [
-          { id: "mock-plan-monthly", name: "Monthly subscription" },
-          { id: "mock-plan-2weeks", name: "2 week subscription" },
-        ],
-      },
-    ],
-    subscriptionAllocations: {
-      "401": {
-        "mock-plan-monthly": { checkout: 35.99, compareAt: 39.99 },
-        "mock-plan-2weeks": { checkout: 34.49, compareAt: 39.99 },
-      },
-      "402": {
-        "mock-plan-monthly": { checkout: 44.99, compareAt: 49.99 },
-        "mock-plan-2weeks": { checkout: 42.99, compareAt: 49.99 },
-      },
-    },
-    discountMode: previewPayload.preview.discountMode,
-    subscriptionPercent: previewPayload.preview.subscriptionPercent,
-    subscriptionFixed: previewPayload.preview.subscriptionFixed,
+    previewBasePrice: baseUnitPrice,
+    previewSubscriptionPrice: subscriptionCheckout,
+    savingsLabel:
+      previewPayload.preview.discountMode === "fixed"
+        ? `SAVE $${previewPayload.preview.subscriptionFixed.toFixed(2)}`
+        : `SAVE ${Math.round(previewPayload.preview.subscriptionPercent)}%`,
     previewData: previewPayload,
   };
 }
 
 function buildWidgetPreviewDocument(config: ReturnType<typeof buildWidgetPreviewConfig>) {
-  const serializedConfig = escapeForInlineScript(JSON.stringify(config));
-  const serializedStyles = widgetStylesSource.replace(/<\//g, "<\\/");
-  const serializedRuntime = widgetRuntimeSource.replace(/<\//g, "<\\/");
+  const basePriceLabel = `$${config.previewBasePrice.toFixed(2)}`;
+  const subscriptionPriceLabel = `$${config.previewSubscriptionPrice.toFixed(2)}`;
+  const settings = config.previewData.widgetSettings;
+  const footer = settings.subscriptionFooter?.trim() || "Powered by SubBulk";
+  const purchaseOptionsLabel = settings.purchaseOptionsLabel?.trim() || "Purchase options";
+  const activeBorderColor = settings.accentGreenHex || "#2E7D32";
+  const primaryColor = settings.primaryColorHex || "#D73C35";
+  const fontFamily = settings.fontFamily || 'system-ui, -apple-system, "Segoe UI", sans-serif';
+  const borderRadius = Math.max(0, Number(settings.borderRadiusPx) || 6);
+  const borderThickness = Math.max(1, Number(settings.borderThicknessPx) || 1);
+  const showSavingsBadge = settings.showSavingsBadge !== false;
+  const showCompareAtPrice = settings.showCompareAtPrice !== false;
+  const showSubscriptionDetails = settings.showSubscriptionDetails !== false;
+  const freeShippingNote = settings.freeShippingNote?.trim() || "Free Shipping on all orders over $99.99";
+  const customCss = settings.customCssEnabled && settings.customCss ? settings.customCss : "";
 
   return `<!doctype html>
 <html lang="en">
@@ -312,146 +310,209 @@ function buildWidgetPreviewDocument(config: ReturnType<typeof buildWidgetPreview
       body {
         margin: 0;
         background: #ffffff;
-        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        color: #0f172a;
+        font-family: ${fontFamily};
+        color: #1f2937;
       }
       .preview-shell {
-        padding: 8px;
+        padding: 10px;
+        overflow: hidden;
       }
       .preview-product {
-        max-width: 100%;
-        margin: 0 auto;
+        width: 100%;
+        margin: 0;
         background: #ffffff;
-        border-radius: 12px;
-        padding: 8px;
+        border-radius: 16px;
+        padding: 0;
       }
-      .price.price--large,
-      .product-form__input {
-        margin-bottom: 0;
-      }
-      .price__container {
+      .preview-price {
         display: flex;
-        gap: 12px;
         align-items: center;
+        gap: 12px;
+        margin-bottom: 14px;
       }
-      .price-item--regular {
-        font-size: 28px;
+      .preview-price-current {
+        font-size: 34px;
+        line-height: 1;
         font-weight: 700;
-        color: #0f172a;
+        color: ${primaryColor};
       }
-      .price-item--compare {
+      .preview-price-compare {
         font-size: 16px;
-        color: #94a3b8;
+        color: #8a8a8a;
         text-decoration: line-through;
       }
-      .product-form__group,
-      .product-form__buttons {
+      .preview-purchase-options-label {
+        margin: 0 0 10px;
+        font-size: 14px;
+        color: #6b7280;
+      }
+      .preview-widget {
         display: grid;
         gap: 12px;
       }
-      .preview-form-support {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        overflow: hidden;
-        clip: rect(0, 0, 0, 0);
-        white-space: nowrap;
-      }
-      .product-form__buttons button {
-        height: 46px;
-        border: 0;
-        border-radius: 999px;
-        background: #0f172a;
-        color: #ffffff;
-        font-size: 14px;
-        font-weight: 600;
-      }
-      .product-form__input fieldset {
-        margin: 0;
-        padding: 14px;
-        border: 1px solid #dbe2ea;
-        border-radius: 14px;
-      }
-      .product-form__input legend {
-        padding: 0 6px;
-        font-size: 12px;
-        color: #475569;
-      }
-      .preview-variant-select {
-        width: 100%;
-        height: 42px;
-        border-radius: 12px;
-        border: 1px solid #cbd5e1;
-        padding: 0 12px;
+      .preview-option {
+        border: ${borderThickness}px solid #d1d5db;
+        border-radius: ${borderRadius}px;
+        padding: 14px 18px;
         background: #fff;
+        box-sizing: border-box;
       }
-      ${serializedStyles}
+      .preview-option--active {
+        border-color: ${activeBorderColor};
+        box-shadow: 0 0 0 2px ${activeBorderColor};
+      }
+      .preview-option-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+      }
+      .preview-option-left {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-width: 0;
+      }
+      .preview-radio {
+        width: 18px;
+        height: 18px;
+        border-radius: 999px;
+        border: 2px solid #9ca3af;
+        box-sizing: border-box;
+        position: relative;
+        flex: 0 0 auto;
+      }
+      .preview-option--active .preview-radio {
+        border-color: #1f80ff;
+      }
+      .preview-option--active .preview-radio::after {
+        content: "";
+        position: absolute;
+        inset: 3px;
+        border-radius: 999px;
+        background: #1f80ff;
+      }
+      .preview-option-title {
+        font-size: 15px;
+        font-weight: 500;
+        color: #2f2f2f;
+      }
+      .preview-option-price {
+        font-size: 15px;
+        font-weight: 700;
+        color: #2f2f2f;
+        white-space: nowrap;
+        flex: 0 0 auto;
+      }
+      .preview-savings-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-left: 10px;
+        padding: 6px 12px;
+        background: #f6a623;
+        color: #1f2937;
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        border-radius: 8px;
+        vertical-align: middle;
+      }
+      .preview-deliver-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 12px;
+        padding-left: 30px;
+        flex-wrap: wrap;
+      }
+      .preview-deliver-label {
+        font-size: 14px;
+        color: #5a5a5a;
+      }
+      .preview-select {
+        display: inline-flex;
+        align-items: center;
+        justify-content: space-between;
+        min-width: 220px;
+        max-width: 100%;
+        height: 40px;
+        padding: 0 14px;
+        background: #fff;
+        border: 1px solid #d1d5db;
+        border-radius: ${borderRadius}px;
+        font-size: 14px;
+        color: #2f2f2f;
+        box-sizing: border-box;
+      }
+      .preview-chevron {
+        margin-left: 12px;
+        width: 0;
+        height: 0;
+        border-left: 6px solid transparent;
+        border-right: 6px solid transparent;
+        border-top: 7px solid #666;
+      }
+      .preview-footer {
+        margin-top: 4px;
+        text-align: right;
+        font-size: 10px;
+        color: #9ca3af;
+      }
+      .preview-note {
+        margin-top: 2px;
+        font-size: 11px;
+        color: #6b7280;
+      }
+      ${customCss}
     </style>
   </head>
   <body>
     <div class="preview-shell">
-      <div class="preview-product" data-product-id="1001">
-        <div class="price price--large" role="status">
-          <div class="price__container">
-            <span class="price-item price-item--regular" data-subbulk-main-price>$39.99</span>
-            <span class="price-item price-item--compare">$49.99</span>
-          </div>
+      <div class="preview-product">
+        <div class="preview-price">
+          <div class="preview-price-current">${subscriptionPriceLabel.replace(/\./g, ".")}</div>
+          ${showCompareAtPrice ? `<div class="preview-price-compare">${basePriceLabel}</div>` : ""}
         </div>
-        <div class="product-form__input preview-form-support">
-          <fieldset>
-            <legend>Purchase options</legend>
-            <label><input type="radio" checked /> One-time purchase</label>
-            <label><input type="radio" /> Subscribe &amp; save</label>
-          </fieldset>
+        <div class="preview-widget subbulk">
+          <div class="preview-purchase-options-label">${escapeForInlineScript(purchaseOptionsLabel)}</div>
+
+          <div class="preview-option">
+            <div class="preview-option-row">
+              <div class="preview-option-left">
+                <span class="preview-radio"></span>
+                <span class="preview-option-title">One-time purchase</span>
+              </div>
+              <div class="preview-option-price">${basePriceLabel}</div>
+            </div>
+          </div>
+
+          <div class="preview-option preview-option--active">
+            <div class="preview-option-row">
+              <div class="preview-option-left">
+                <span class="preview-radio"></span>
+                <div>
+                  <span class="preview-option-title">Subscribe &amp; save</span>
+                  ${showSavingsBadge ? `<span class="preview-savings-badge">${config.savingsLabel}</span>` : ""}
+                </div>
+              </div>
+              <div class="preview-option-price">${subscriptionPriceLabel}</div>
+            </div>
+
+            <div class="preview-deliver-row">
+              <div class="preview-deliver-label">Deliver every</div>
+              <div class="preview-select">
+                <span>Monthly subscription</span>
+                <span class="preview-chevron"></span>
+              </div>
+            </div>
+          </div>
+
+          <div class="preview-footer">${escapeForInlineScript(footer)}</div>
+          ${showSubscriptionDetails ? `<div class="preview-note">${escapeForInlineScript(freeShippingNote)}</div>` : ""}
         </div>
-        <form action="/cart/add" method="post">
-          <div class="product-form__group preview-form-support">
-            <select class="preview-variant-select" name="id">
-              <option value="401">Standard / $39.99</option>
-              <option value="402">Large / $49.99</option>
-            </select>
-            <input type="number" name="quantity" value="1" min="1" />
-          </div>
-          <div id="subbulk-root-settings-preview" class="subbulk-root" data-subbulk-config-id="subbulk-config-settings-preview"></div>
-          <div class="product-form__buttons preview-form-support">
-            <button type="submit">Add to cart</button>
-          </div>
-        </form>
       </div>
     </div>
-    <script type="application/json" id="subbulk-config-settings-preview">${serializedConfig}</script>
-    <script>${serializedRuntime}</script>
-    <script>
-      (function () {
-        function sendHeight() {
-          var body = document.body;
-          var doc = document.documentElement;
-          var height = Math.max(
-            body ? body.scrollHeight : 0,
-            doc ? doc.scrollHeight : 0,
-            body ? body.offsetHeight : 0,
-            doc ? doc.offsetHeight : 0
-          );
-          window.parent.postMessage({ type: "subbulk-settings-preview-height", height: height }, "*");
-        }
-
-        if (typeof ResizeObserver !== "undefined") {
-          var observer = new ResizeObserver(sendHeight);
-          observer.observe(document.body);
-          observer.observe(document.documentElement);
-        }
-
-        window.addEventListener("load", sendHeight);
-        window.addEventListener("click", function () {
-          window.setTimeout(sendHeight, 0);
-        });
-        window.addEventListener("change", function () {
-          window.setTimeout(sendHeight, 0);
-        });
-        window.setTimeout(sendHeight, 60);
-        window.setTimeout(sendHeight, 220);
-      })();
-    </script>
   </body>
 </html>`;
 }
@@ -513,7 +574,7 @@ export default function SettingsPage() {
   const [freeShippingNote, setFreeShippingNote] = useState(
     settings.freeShippingNote,
   );
-  const [previewHeight, setPreviewHeight] = useState(700);
+  const previewHeight = 280;
   const previewPayload = useMemo(
     () => buildWidgetPreviewPayload({
       showWidgetOnProductPage,
@@ -605,25 +666,6 @@ export default function SettingsPage() {
     const timeout = window.setTimeout(() => setToast(null), 2600);
     return () => window.clearTimeout(timeout);
   }, [toast]);
-
-  useEffect(() => {
-    function onMessage(event: MessageEvent) {
-      const data = event.data;
-      if (!data || typeof data !== "object" || data.type !== "subbulk-settings-preview-height") {
-        return;
-      }
-
-      const nextHeight = Number(data.height);
-      if (!Number.isFinite(nextHeight) || nextHeight <= 0) {
-        return;
-      }
-
-      setPreviewHeight(Math.max(420, Math.min(Math.ceil(nextHeight), 760)));
-    }
-
-    window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
-  }, []);
 
   return (
     <Page>
@@ -887,6 +929,7 @@ export default function SettingsPage() {
                     borderRadius: 18,
                     overflow: "hidden",
                     background: "#ffffff",
+                    height: previewHeight,
                   }}
                 >
                   <iframe

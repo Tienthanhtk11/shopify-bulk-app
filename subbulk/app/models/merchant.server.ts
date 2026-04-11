@@ -1,6 +1,7 @@
 import prisma from "../db.server";
 import { resolveEntitlements } from "../services/entitlements.server";
 import { listAdminPlanDefinitions } from "../services/admin-plan-catalog.server";
+import { buildRedactedPayload } from "../services/compliance.server";
 
 type MerchantSessionLike = {
   shop: string;
@@ -90,6 +91,10 @@ export async function markMerchantUninstalled(shopDomain: string) {
   });
 
   return updated;
+}
+
+export async function deleteShopSessions(shopDomain: string) {
+  return prisma.session.deleteMany({ where: { shop: shopDomain } });
 }
 
 export async function listMerchantPlans(shopDomain: string) {
@@ -392,6 +397,53 @@ export async function scrubMerchantProfile(shopDomain: string) {
       lastSeenAt: new Date(),
     },
   });
+}
+
+export async function redactCustomerComplianceData(shopDomain: string) {
+  const merchant = await getMerchantByShopDomain(shopDomain);
+  if (!merchant) return null;
+
+  return prisma.merchantEvent.updateMany({
+    where: {
+      merchantId: merchant.id,
+      type: {
+        in: ["compliance.customers_data_request", "compliance.customers_redact"],
+      },
+    },
+    data: {
+      payloadJson: safeJson(buildRedactedPayload("customers_redact", { shopDomain })),
+    },
+  });
+}
+
+export async function minimizeMerchantRetentionData(shopDomain: string) {
+  const merchant = await getMerchantByShopDomain(shopDomain);
+  if (!merchant) return null;
+
+  await prisma.$transaction([
+    prisma.merchantEvent.updateMany({
+      where: { merchantId: merchant.id },
+      data: {
+        payloadJson: safeJson(buildRedactedPayload("shop_redact", { shopDomain })),
+      },
+    }),
+    prisma.merchantPlan.updateMany({
+      where: { merchantId: merchant.id },
+      data: {
+        rawPayloadJson: safeJson(buildRedactedPayload("shop_redact", { shopDomain })),
+      },
+    }),
+    prisma.merchantDataDeletionRequest.updateMany({
+      where: { merchantId: merchant.id },
+      data: {
+        requestedBy: "redacted",
+        auditNotes: "Redacted for Shopify privacy compliance.",
+        failureReason: null,
+      },
+    }),
+  ]);
+
+  return true;
 }
 
 export async function createAndProcessDeletionRequest(input: {
