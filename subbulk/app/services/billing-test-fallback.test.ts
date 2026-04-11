@@ -1,4 +1,8 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+vi.mock("../db.server", () => ({
+  default: {},
+}));
 import {
   buildManualTestSubscriptionInput,
   getBillingTestFallbackState,

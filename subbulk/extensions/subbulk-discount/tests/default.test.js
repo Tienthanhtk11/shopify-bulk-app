@@ -1,44 +1,125 @@
-import path from "path";
-import fs from "fs";
-import { describe, beforeAll, test, expect } from "vitest";
-import { buildFunction, getFunctionInfo, loadSchema, loadInputQuery, loadFixture, validateTestAssets, runFunction } from "@shopify/shopify-function-test-helpers";
+import { describe, expect, it, vi } from "vitest";
 
-describe("Default Integration Test", () => {
-  let schema;
-  let functionDir;
-  let functionInfo;
-  let schemaPath;
-  let targeting;
-  let functionRunnerPath;
-  let wasmPath;
+vi.mock("../generated/api", () => ({
+  DiscountApplicationStrategy: {
+    First: "FIRST",
+    Maximum: "MAXIMUM",
+  },
+}));
 
-  beforeAll(async () => {
-    functionDir = path.dirname(__dirname);
-    await buildFunction(functionDir);
-    functionInfo = await getFunctionInfo(functionDir);
-    ({ schemaPath, functionRunnerPath, wasmPath, targeting } = functionInfo);
-    schema = await loadSchema(schemaPath);
-  }, 45000);
+import { run } from "../src/run";
 
-  const fixturesDir = path.join(__dirname, "fixtures");
-  const fixtureFiles = fs.readdirSync(fixturesDir)
-    .filter((file) => file.endsWith(".json"))
-    .map((file) => path.join(fixturesDir, file));
+function buildCartLine(overrides = {}) {
+  return {
+    id: "gid://shopify/CartLine/1",
+    quantity: 5,
+    merchandise: {
+      __typename: "ProductVariant",
+      product: {
+        metafield: {
+          value: JSON.stringify([
+            { qtyBreakpoint: 1, priceAfterDiscount: 50, bulkPrice: 60 },
+            { qtyBreakpoint: 5, priceAfterDiscount: 45, bulkPrice: 55 },
+          ]),
+        },
+      },
+    },
+    cost: {
+      amountPerQuantity: {
+        amount: "50.00",
+      },
+      compareAtAmountPerQuantity: null,
+    },
+    sellingPlanAllocation: null,
+    ...overrides,
+  };
+}
 
-  fixtureFiles.forEach((fixtureFile) => {
-    test(`runs ${path.relative(fixturesDir, fixtureFile)}`, async () => {
-      const fixture = await loadFixture(fixtureFile);
-      const targetInputQueryPath = targeting[fixture.target].inputQueryPath;
-      const inputQueryAST = await loadInputQuery(targetInputQueryPath);
+describe("subbulk discount run", () => {
+  it("returns no discounts when no bulk pricing metafield is present", () => {
+    const result = run({
+      cart: {
+        lines: [
+          buildCartLine({
+            merchandise: {
+              __typename: "ProductVariant",
+              product: {
+                metafield: null,
+              },
+            },
+          }),
+        ],
+      },
+    });
 
-      const validationResult = await validateTestAssets({ schema, fixture, inputQueryAST });
-      expect(validationResult.inputQuery.errors).toEqual([]);
-      expect(validationResult.inputFixture.errors).toEqual([]);
-      expect(validationResult.outputFixture.errors).toEqual([]);
+    expect(result).toEqual({
+      discountApplicationStrategy: "FIRST",
+      discounts: [],
+    });
+  });
 
-      const runResult = await runFunction(fixture, functionRunnerPath, wasmPath, targetInputQueryPath, schemaPath);
-      expect(runResult.error).toBeNull();
-      expect(runResult.result.output).toEqual(fixture.expectedOutput);
-    }, 10000);
+  it("applies the matching bulk tier as a fixed amount discount per item", () => {
+    const result = run({
+      cart: {
+        lines: [buildCartLine()],
+      },
+    });
+
+    expect(result).toEqual({
+      discountApplicationStrategy: "MAXIMUM",
+      discounts: [
+        {
+          message: "Bulk Discount (5+ items)",
+          targets: [{ cartLine: { id: "gid://shopify/CartLine/1" } }],
+          value: {
+            fixedAmount: {
+              amount: "5",
+              appliesToEachItem: true,
+            },
+          },
+        },
+      ],
+    });
+  });
+
+  it("preserves the subscription ratio when a selling plan is already discounting the line", () => {
+    const result = run({
+      cart: {
+        lines: [
+          buildCartLine({
+            quantity: 5,
+            cost: {
+              amountPerQuantity: {
+                amount: "90.00",
+              },
+              compareAtAmountPerQuantity: {
+                amount: "100.00",
+              },
+            },
+            sellingPlanAllocation: {
+              sellingPlan: {
+                name: "Subscribe & Save 10%",
+              },
+            },
+          }),
+        ],
+      },
+    });
+
+    expect(result).toEqual({
+      discountApplicationStrategy: "MAXIMUM",
+      discounts: [
+        {
+          message: "Bulk Discount (5+ items)",
+          targets: [{ cartLine: { id: "gid://shopify/CartLine/1" } }],
+          value: {
+            fixedAmount: {
+              amount: "49.5",
+              appliesToEachItem: true,
+            },
+          },
+        },
+      ],
+    });
   });
 });
